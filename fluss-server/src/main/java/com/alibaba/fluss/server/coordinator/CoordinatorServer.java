@@ -216,7 +216,7 @@ public class CoordinatorServer extends ServerBase {
 
     private void registerCoordinatorLeader() throws Exception {
         // set server id
-        String serverId = UUID.randomUUID().toString();
+        String serverId = this.serverId;
         CoordinatorAddress coordinatorAddress =
                 new CoordinatorAddress(serverId, rpcServer.getHostname(), rpcServer.getPort());
         zkClient.registerCoordinatorLeader(coordinatorAddress);
