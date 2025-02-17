@@ -180,7 +180,7 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         // only when it's no partitioned table do we generate the assignment for it
         if (!tableDescriptor.isPartitioned()) {
             int replicaFactor = tableDescriptor.getReplicationFactor(defaultReplicationFactor);
-            int[] servers = metadataCache.getLiveServerIds();
+            int[] servers = metadataCache.getAliveTabletServerIds();
             tableAssignment =
                     TableAssignmentUtils.generateAssignment(bucketCount, replicaFactor, servers);
         } else {
