@@ -36,7 +36,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -153,7 +156,7 @@ class CompletedSnapshotStoreManagerTest {
         assertThat(completedSnapshotStoreManager.getBucketCompletedSnapshotStores().size())
                 .isEqualTo(2);
         // after remove CompletedSnapshotStore
-        completedSnapshotStoreManager.onRemoveCompletedSnapshotStoreByTableBuckets(tableBuckets);
+        completedSnapshotStoreManager.removeCompletedSnapshotStoreByTableBuckets(tableBuckets);
         assertThat(completedSnapshotStoreManager.getBucketCompletedSnapshotStores()).isEmpty();
     }
 
