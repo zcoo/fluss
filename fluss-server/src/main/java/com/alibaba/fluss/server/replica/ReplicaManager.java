@@ -17,11 +17,9 @@
 package com.alibaba.fluss.server.replica;
 
 import com.alibaba.fluss.annotation.VisibleForTesting;
-import com.alibaba.fluss.cluster.ServerNode;
 import com.alibaba.fluss.config.ConfigOptions;
 import com.alibaba.fluss.config.Configuration;
 import com.alibaba.fluss.exception.FencedLeaderEpochException;
-import com.alibaba.fluss.exception.FlussRuntimeException;
 import com.alibaba.fluss.exception.InvalidCoordinatorException;
 import com.alibaba.fluss.exception.InvalidRequiredAcksException;
 import com.alibaba.fluss.exception.LogOffsetOutOfRangeException;
@@ -31,8 +29,6 @@ import com.alibaba.fluss.exception.StorageException;
 import com.alibaba.fluss.exception.UnknownTableOrBucketException;
 import com.alibaba.fluss.fs.FsPath;
 import com.alibaba.fluss.metadata.PhysicalTablePath;
-import com.alibaba.fluss.metadata.Schema;
-import com.alibaba.fluss.metadata.SchemaInfo;
 import com.alibaba.fluss.metadata.TableBucket;
 import com.alibaba.fluss.metadata.TableInfo;
 import com.alibaba.fluss.metadata.TablePath;
@@ -257,8 +253,15 @@ public class ReplicaManager {
                         "delay fetch log",
                         serverId,
                         conf.getInt(ConfigOptions.LOG_REPLICA_FETCH_OPERATION_PURGE_NUMBER));
+        this.internalListenerName = conf.get(ConfigOptions.INTERNAL_LISTENER_NAME);
 
-        this.replicaFetcherManager = new ReplicaFetcherManager(conf, rpcClient, serverId, this);
+        this.replicaFetcherManager =
+                new ReplicaFetcherManager(
+                        conf,
+                        rpcClient,
+                        serverId,
+                        this,
+                        (nodeId) -> metadataCache.getTabletServer(nodeId, internalListenerName));
         this.adjustIsrManager = new AdjustIsrManager(scheduler, coordinatorGateway, serverId);
         this.fatalErrorHandler = fatalErrorHandler;
 
@@ -269,7 +272,6 @@ public class ReplicaManager {
                         zkClient, completedKvSnapshotCommitter, kvSnapshotResource, conf);
         this.remoteLogManager = remoteLogManager;
         this.serverMetricGroup = serverMetricGroup;
-        this.internalListenerName = conf.get(ConfigOptions.INTERNAL_LISTENER_NAME);
         this.clock = clock;
         registerMetrics();
     }
@@ -331,7 +333,7 @@ public class ReplicaManager {
                 replicaStateChangeLock,
                 () -> {
                     // check or apply coordinator epoch.
-                    validateAndApplyCoordinatorEpoch(requestCoordinatorEpoch);
+                    validateAndApplyCoordinatorEpoch(requestCoordinatorEpoch, "notifyLeaderAndIsr");
 
                     List<NotifyLeaderAndIsrData> replicasToBeLeader = new ArrayList<>();
                     List<NotifyLeaderAndIsrData> replicasToBeFollower = new ArrayList<>();
@@ -550,7 +552,7 @@ public class ReplicaManager {
                 replicaStateChangeLock,
                 () -> {
                     // check or apply coordinator epoch.
-                    validateAndApplyCoordinatorEpoch(requestCoordinatorEpoch);
+                    validateAndApplyCoordinatorEpoch(requestCoordinatorEpoch, "stopReplicas");
 
                     // store the deleted table id and the table dir path to delete the table dir
                     // after delete all the buckets of this table.
@@ -629,7 +631,8 @@ public class ReplicaManager {
                 () -> {
                     // check or apply coordinator epoch.
                     validateAndApplyCoordinatorEpoch(
-                            notifyRemoteLogOffsetsData.getCoordinatorEpoch());
+                            notifyRemoteLogOffsetsData.getCoordinatorEpoch(),
+                            "notifyRemoteLogOffsets");
                     // update the remote log offsets and delete local segments already copied to
                     // remote.
                     TableBucket tb = notifyRemoteLogOffsetsData.getTableBucket();
@@ -650,7 +653,8 @@ public class ReplicaManager {
                 () -> {
                     // check or apply coordinator epoch.
                     validateAndApplyCoordinatorEpoch(
-                            notifyKvSnapshotOffsetData.getCoordinatorEpoch());
+                            notifyKvSnapshotOffsetData.getCoordinatorEpoch(),
+                            "notifyKvSnapshotOffset");
                     // update the snapshot offset.
                     TableBucket tb = notifyKvSnapshotOffsetData.getTableBucket();
                     LogTablet logTablet = getReplicaOrException(tb).getLogTablet();
@@ -668,7 +672,8 @@ public class ReplicaManager {
                 () -> {
                     // check or apply coordinator epoch.
                     validateAndApplyCoordinatorEpoch(
-                            notifyLakeTableOffsetData.getCoordinatorEpoch());
+                            notifyLakeTableOffsetData.getCoordinatorEpoch(),
+                            "notifyLakeTableOffset");
 
                     Map<TableBucket, LakeBucketOffset> lakeBucketOffsets =
                             notifyLakeTableOffsetData.getLakeBucketOffsets();
@@ -801,7 +806,8 @@ public class ReplicaManager {
 
         // Truncate the follower replicas LEO to highWatermark.
         // TODO this logic need to be removed after we introduce leader epoch cache, and fetcher
-        // manager support truncating while fetching. See FLUSS-56112423
+        // manager support truncating while fetching. Trace by
+        // https://github.com/alibaba/fluss/issues/673
         truncateToHighWatermark(replicasBecomeFollower);
 
         // add fetcher for those follower replicas.
@@ -821,38 +827,16 @@ public class ReplicaManager {
                         new NotifyLeaderAndIsrResultForBucket(
                                 tb,
                                 ApiError.fromThrowable(
-                                        new NotLeaderOrFollowerException(
+                                        new StorageException(
                                                 String.format(
                                                         "Could not find leader for follower replica %s while make "
-                                                                + "leader for table bucket %s",
+                                                                + "follower for %s.",
                                                         serverId, tb)))));
             } else {
-                // fetch from leader server node with internal endpoint.
-                Optional<ServerNode> leader =
-                        metadataCache.getTabletServer(leaderId, internalListenerName);
-                if (!leader.isPresent()) {
-                    // If leader serverNode is not in the metadata, we need to return a bucket level
-                    // error to let CoordinatorServer retry sending makeLeaderOrFollower request.
-                    // This situation will be happened if the leader serverNode is offline and
-                    // didn't recovery now.
-                    result.put(
-                            tb,
-                            new NotifyLeaderAndIsrResultForBucket(
-                                    tb,
-                                    ApiError.fromThrowable(
-                                            new NotLeaderOrFollowerException(
-                                                    String.format(
-                                                            "Could not find leader in server metadata by id "
-                                                                    + "for replica %s while make follower",
-                                                            replica)))));
-                } else {
-                    // For these replicas whose leader id has been set and the server id is in the
-                    // metadata. We need to add fetcher for these replicas.
-                    bucketAndStatus.put(
-                            tb,
-                            new InitialFetchStatus(
-                                    tb.getTableId(), leader.get(), logTablet.localLogEndOffset()));
-                }
+                bucketAndStatus.put(
+                        tb,
+                        new InitialFetchStatus(
+                                tb.getTableId(), leaderId, logTablet.localLogEndOffset()));
             }
         }
         replicaFetcherManager.addFetcherForBuckets(bucketAndStatus);
@@ -1422,14 +1406,14 @@ public class ReplicaManager {
         }
     }
 
-    private void validateAndApplyCoordinatorEpoch(int requestCoordinatorEpoch) {
+    private void validateAndApplyCoordinatorEpoch(int requestCoordinatorEpoch, String requestName) {
         if (requestCoordinatorEpoch < this.coordinatorEpoch) {
             String errorMessage =
                     String.format(
-                            "invalid coordinator epoch %s in stopReplica request, "
+                            "invalid coordinator epoch %s in %s request, "
                                     + "The latest known coordinator epoch is %s.",
-                            requestCoordinatorEpoch, this.coordinatorEpoch);
-            LOG.warn("Ignore the stopReplica request because {}", errorMessage);
+                            requestCoordinatorEpoch, requestName, this.coordinatorEpoch);
+            LOG.warn("Ignore the {} request because {}", requestName, errorMessage);
             throw new InvalidCoordinatorException(errorMessage);
         } else {
             this.coordinatorEpoch = requestCoordinatorEpoch;
@@ -1512,19 +1496,6 @@ public class ReplicaManager {
 
     private boolean isRequiredAcksInvalid(int requiredAcks) {
         return requiredAcks != 0 && requiredAcks != 1 && requiredAcks != -1;
-    }
-
-    private Schema getSchemaFromZk(TablePath tablePath) throws Exception {
-        int schemaId = zkClient.getCurrentSchemaId(tablePath);
-        Optional<SchemaInfo> schemaInfoOpt = zkClient.getSchemaById(tablePath, schemaId);
-        SchemaInfo schemaInfo =
-                schemaInfoOpt.orElseThrow(
-                        () ->
-                                new FlussRuntimeException(
-                                        String.format(
-                                                "The schema of table %s not found in zookeeper.",
-                                                tablePath)));
-        return schemaInfo.getSchema();
     }
 
     @VisibleForTesting

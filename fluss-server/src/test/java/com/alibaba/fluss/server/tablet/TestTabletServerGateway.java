@@ -291,19 +291,27 @@ public class TestTabletServerGateway implements TabletServerGateway {
     @Override
     public CompletableFuture<NotifyRemoteLogOffsetsResponse> notifyRemoteLogOffsets(
             NotifyRemoteLogOffsetsRequest request) {
-        throw new UnsupportedOperationException();
+        CompletableFuture<NotifyRemoteLogOffsetsResponse> response = new CompletableFuture<>();
+        requests.add(Tuple2.of(request, response));
+        return response;
     }
 
     @Override
     public CompletableFuture<NotifyKvSnapshotOffsetResponse> notifyKvSnapshotOffset(
             NotifyKvSnapshotOffsetRequest request) {
-        throw new UnsupportedOperationException();
+        CompletableFuture<NotifyKvSnapshotOffsetResponse> response = new CompletableFuture<>();
+        requests.add(Tuple2.of(request, response));
+        return response;
     }
 
     @Override
     public CompletableFuture<NotifyLakeTableOffsetResponse> notifyLakeTableOffset(
             NotifyLakeTableOffsetRequest request) {
         throw new UnsupportedOperationException();
+    }
+
+    public int pendingRequestSize() {
+        return requests.size();
     }
 
     public ApiMessage getRequest(int index) {

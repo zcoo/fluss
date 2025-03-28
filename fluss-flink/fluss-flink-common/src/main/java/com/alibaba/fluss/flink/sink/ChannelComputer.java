@@ -14,19 +14,27 @@
  * limitations under the License.
  */
 
-package com.alibaba.fluss.exception;
+package com.alibaba.fluss.flink.sink;
 
-import com.alibaba.fluss.annotation.PublicEvolving;
+import java.io.Serializable;
 
 /**
- * Exception thrown when the index file is corrupt. This exception is thrown when the index file is
- * corrupted.
+ * A utility class to compute which downstream channel a given record should be sent to before flink
+ * sink.
  *
- * @since 0.1
+ * @param <T> type of record
  */
-@PublicEvolving
-public class CorruptIndexException extends RetriableException {
-    public CorruptIndexException(String message) {
-        super(message);
+public interface ChannelComputer<T> extends Serializable {
+    void setup(int numChannels);
+
+    int channel(T record);
+
+    static int select(String partitionName, int bucket, int numChannels) {
+        int startChannel = Math.abs(partitionName.hashCode()) % numChannels;
+        return (startChannel + bucket) % numChannels;
+    }
+
+    static int select(int bucket, int numChannels) {
+        return bucket % numChannels;
     }
 }

@@ -33,15 +33,16 @@ import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** Tests for {@link KafkaRequestHandler}. */
 public class KafkaRequestHandlerTest {
 
     @Test
     public void testKafkaApiVersionsNotSupported() {
-        KafkaRequestHandler handler = new KafkaRequestHandler();
+        KafkaRequestHandler handler = createKafkaRequestHandler();
         short latestVersion = ApiKeys.API_VERSIONS.latestVersion();
         ApiVersionsRequest apiVersionsRequest =
                 new ApiVersionsRequest.Builder().build(latestVersion);
-        ChannelHandlerContext ctx = new TestChannelHandlerContext();
+        ChannelHandlerContext ctx = new TestingChannelHandlerContext();
         KafkaRequest request =
                 new KafkaRequest(
                         ApiKeys.API_VERSIONS,
@@ -53,7 +54,7 @@ public class KafkaRequestHandlerTest {
                         new CompletableFuture<>());
         handler.handleApiVersionsRequest(request);
 
-        ByteBuf responseBuffer = request.serialize();
+        ByteBuf responseBuffer = request.responseBuffer();
         ApiVersionsResponse response =
                 (ApiVersionsResponse)
                         AbstractResponse.parseResponse(
@@ -65,11 +66,11 @@ public class KafkaRequestHandlerTest {
 
     @Test
     public void testKafkaApiVersionsRequest() {
-        KafkaRequestHandler handler = new KafkaRequestHandler();
+        KafkaRequestHandler handler = createKafkaRequestHandler();
         short latestVersion = ApiKeys.API_VERSIONS.latestVersion();
         ApiVersionsRequest apiVersionsRequest =
                 new ApiVersionsRequest.Builder().build(latestVersion);
-        ChannelHandlerContext ctx = new TestChannelHandlerContext();
+        ChannelHandlerContext ctx = new TestingChannelHandlerContext();
         KafkaRequest request =
                 new KafkaRequest(
                         ApiKeys.API_VERSIONS,
@@ -81,7 +82,7 @@ public class KafkaRequestHandlerTest {
                         new CompletableFuture<>());
         handler.handleApiVersionsRequest(request);
 
-        ByteBuf responseBuffer = request.serialize();
+        ByteBuf responseBuffer = request.responseBuffer();
         ApiVersionsResponse response =
                 (ApiVersionsResponse)
                         AbstractResponse.parseResponse(
@@ -107,5 +108,9 @@ public class KafkaRequestHandlerTest {
                                         .isEqualTo(apiKeys.latestVersion());
                             }
                         });
+    }
+
+    private static KafkaRequestHandler createKafkaRequestHandler() {
+        return new KafkaRequestHandler(new TestingTabletGatewayService());
     }
 }

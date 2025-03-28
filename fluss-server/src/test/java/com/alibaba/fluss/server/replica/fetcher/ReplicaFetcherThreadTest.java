@@ -136,7 +136,8 @@ public class ReplicaFetcherThreadTest {
         assertThat(future.get()).containsOnly(new ProduceLogResultForBucket(tb, 0, 10L));
 
         followerFetcher.addBuckets(
-                Collections.singletonMap(tb, new InitialFetchStatus(DATA1_TABLE_ID, leader, 0L)));
+                Collections.singletonMap(
+                        tb, new InitialFetchStatus(DATA1_TABLE_ID, leader.id(), 0L)));
         assertThat(followerRM.getReplicaOrException(tb).getLocalLogEndOffset()).isEqualTo(0L);
 
         // begin fetcher thread.
@@ -160,6 +161,42 @@ public class ReplicaFetcherThreadTest {
                 () ->
                         assertThat(followerRM.getReplicaOrException(tb).getLocalLogEndOffset())
                                 .isEqualTo(20L));
+    }
+
+    @Test
+    void testFollowerHighWatermarkHigherThanOrEqualToLeader() throws Exception {
+        Replica leaderReplica = leaderRM.getReplicaOrException(tb);
+        Replica followerReplica = followerRM.getReplicaOrException(tb);
+
+        followerFetcher.addBuckets(
+                Collections.singletonMap(
+                        tb, new InitialFetchStatus(DATA1_TABLE_ID, leader.id(), 0L)));
+        assertThat(leaderReplica.getLocalLogEndOffset()).isEqualTo(0L);
+        assertThat(leaderReplica.getLogHighWatermark()).isEqualTo(0L);
+        assertThat(followerReplica.getLocalLogEndOffset()).isEqualTo(0L);
+        assertThat(followerReplica.getLogHighWatermark()).isEqualTo(0L);
+        // begin fetcher thread.
+        followerFetcher.start();
+
+        CompletableFuture<List<ProduceLogResultForBucket>> future;
+        for (int i = 0; i < 1000; i++) {
+            long baseOffset = i * 10L;
+            future = new CompletableFuture<>();
+            leaderRM.appendRecordsToLog(
+                    1000,
+                    1, // don't wait ack
+                    Collections.singletonMap(tb, genMemoryLogRecordsByObject(DATA1)),
+                    future::complete);
+            assertThat(future.get())
+                    .containsOnly(new ProduceLogResultForBucket(tb, baseOffset, baseOffset + 10L));
+            retry(
+                    Duration.ofSeconds(20),
+                    () ->
+                            assertThat(followerReplica.getLocalLogEndOffset())
+                                    .isEqualTo(baseOffset + 10L));
+            assertThat(followerReplica.getLogHighWatermark())
+                    .isGreaterThanOrEqualTo(leaderReplica.getLogHighWatermark());
+        }
     }
 
     private void registerTableInZkClient() throws Exception {

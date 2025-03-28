@@ -166,7 +166,6 @@ public final class Replica {
     /** The manger to manger the isr expand and shrink. */
     private final AdjustIsrManager adjustIsrManager;
 
-    private final List<String> partitionKeys;
     private final Schema schema;
     private final TableConfig tableConfig;
     // logFormat and arrowCompressionInfo are used in hot-path, so cache them here.
@@ -235,7 +234,6 @@ public final class Replica {
         this.tableConfig = tableInfo.getTableConfig();
         this.logFormat = tableConfig.getLogFormat();
         this.arrowCompressionInfo = tableConfig.getArrowCompressionInfo();
-        this.partitionKeys = tableInfo.getPartitionKeys();
         this.snapshotContext = snapshotContext;
         // create a closeable registry for the replica
         this.closeableRegistry = new CloseableRegistry();
@@ -369,8 +367,8 @@ public final class Replica {
 
                             int requestLeaderEpoch = data.getLeaderEpoch();
                             if (requestLeaderEpoch > leaderEpoch) {
-                                onBecomeNewLeader();
                                 leaderEpoch = requestLeaderEpoch;
+                                onBecomeNewLeader();
                                 leaderReplicaIdOpt.set(localTabletServerId);
                                 LOG.info(
                                         "TabletServer {} becomes leader for bucket {}",

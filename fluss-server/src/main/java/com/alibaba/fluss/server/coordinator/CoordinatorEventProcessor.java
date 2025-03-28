@@ -181,7 +181,8 @@ public class CoordinatorEventProcessor implements EventProcessor {
                 new ReplicaStateMachine(
                         coordinatorContext,
                         new CoordinatorRequestBatch(
-                                coordinatorChannelManager, coordinatorEventManager));
+                                coordinatorChannelManager, coordinatorEventManager),
+                        zooKeeperClient);
         this.tableBucketStateMachine =
                 new TableBucketStateMachine(
                         coordinatorContext,
@@ -641,7 +642,6 @@ public class CoordinatorEventProcessor implements EventProcessor {
     }
 
     private void onReplicaBecomeOffline(Set<TableBucketReplica> offlineReplicas) {
-
         LOG.info("The replica {} become offline.", offlineReplicas);
         for (TableBucketReplica offlineReplica : offlineReplicas) {
             coordinatorContext.addOfflineBucketInServer(
@@ -896,7 +896,8 @@ public class CoordinatorEventProcessor implements EventProcessor {
                         leaderAndIsr ->
                                 coordinatorRequestBatch
                                         .addNotifyKvSnapshotOffsetRequestForTabletServers(
-                                                leaderAndIsr.followers(),
+                                                coordinatorContext.getFollowers(
+                                                        tb, leaderAndIsr.leader()),
                                                 tb,
                                                 completedSnapshot.getLogOffset()));
         coordinatorRequestBatch.sendNotifyKvSnapshotOffsetRequest(
@@ -934,7 +935,8 @@ public class CoordinatorEventProcessor implements EventProcessor {
                         leaderAndIsr ->
                                 coordinatorRequestBatch
                                         .addNotifyRemoteLogOffsetsRequestForTabletServers(
-                                                leaderAndIsr.followers(),
+                                                coordinatorContext.getFollowers(
+                                                        tb, leaderAndIsr.leader()),
                                                 tb,
                                                 manifestData.getRemoteLogStartOffset(),
                                                 manifestData.getRemoteLogEndOffset()));
@@ -988,7 +990,9 @@ public class CoordinatorEventProcessor implements EventProcessor {
                                 leaderAndIsr ->
                                         coordinatorRequestBatch
                                                 .addNotifyLakeTableOffsetRequestForTableServers(
-                                                        leaderAndIsr.isr(), tb, lakeTableSnapshot));
+                                                        coordinatorContext.getAssignment(tb),
+                                                        tb,
+                                                        lakeTableSnapshot));
             }
         }
         coordinatorRequestBatch.sendNotifyLakeTableOffsetRequest(
