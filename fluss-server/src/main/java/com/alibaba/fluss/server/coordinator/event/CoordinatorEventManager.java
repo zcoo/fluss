@@ -17,6 +17,8 @@
 package com.alibaba.fluss.server.coordinator.event;
 
 import com.alibaba.fluss.annotation.Internal;
+import com.alibaba.fluss.metrics.MetricNames;
+import com.alibaba.fluss.server.metrics.group.CoordinatorMetricGroup;
 import com.alibaba.fluss.utils.concurrent.ShutdownableThread;
 
 import org.slf4j.Logger;
@@ -40,14 +42,31 @@ public final class CoordinatorEventManager implements EventManager {
     private static final String COORDINATOR_EVENT_THREAD_NAME = "coordinator-event-thread";
 
     private final EventProcessor eventProcessor;
+    private final CoordinatorMetricGroup coordinatorMetricGroup;
 
     private final LinkedBlockingQueue<CoordinatorEvent> queue = new LinkedBlockingQueue<>();
     private final CoordinatorEventThread thread =
             new CoordinatorEventThread(COORDINATOR_EVENT_THREAD_NAME);
     private final Lock putLock = new ReentrantLock();
 
-    public CoordinatorEventManager(EventProcessor eventProcessor) {
+    // metrics
+    private volatile int waitToProcessEventCount;
+
+    public CoordinatorEventManager(
+            EventProcessor eventProcessor, CoordinatorMetricGroup coordinatorMetricGroup) {
         this.eventProcessor = eventProcessor;
+        this.coordinatorMetricGroup = coordinatorMetricGroup;
+        registerMetrics();
+    }
+
+    private void registerMetrics() {
+        coordinatorMetricGroup.gauge(
+                MetricNames.COORDINATOR_WAITING_TO_PROCESS_EVENT_COUNT,
+                () -> waitToProcessEventCount);
+    }
+
+    private void updateMetrics() {
+        waitToProcessEventCount = queue.size();
     }
 
     public void start() {
@@ -72,6 +91,8 @@ public final class CoordinatorEventManager implements EventManager {
                         queue.put(event);
                     } catch (InterruptedException e) {
                         LOG.error("Fail to put coordinator event {}.", event, e);
+                    } finally {
+                        updateMetrics();
                     }
                 });
     }

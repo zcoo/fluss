@@ -40,6 +40,10 @@ public class MetricNames {
     public static final String TABLE_COUNT = "tableCount";
     public static final String BUCKET_COUNT = "bucketCount";
 
+    // for coordinator event processor
+    public static final String COORDINATOR_WAITING_TO_PROCESS_EVENT_COUNT =
+            "coordinatorWaitToProcessEventCount";
+
     // --------------------------------------------------------------------------------------------
     // metrics for tablet server
     // --------------------------------------------------------------------------------------------
