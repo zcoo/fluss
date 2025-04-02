@@ -23,7 +23,6 @@ import com.alibaba.fluss.metrics.MetricNames;
 import com.alibaba.fluss.metrics.SimpleCounter;
 import com.alibaba.fluss.server.metrics.group.CoordinatorMetricGroup;
 import com.alibaba.fluss.utils.concurrent.ShutdownableThread;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +52,6 @@ public final class CoordinatorEventManager implements EventManager {
     private final Lock putLock = new ReentrantLock();
 
     // metrics
-    private volatile int waitToProcessEventCount;
     private Counter finishedEvents;
 
     public CoordinatorEventManager(
@@ -65,15 +63,10 @@ public final class CoordinatorEventManager implements EventManager {
 
     private void registerMetrics() {
         coordinatorMetricGroup.gauge(
-                MetricNames.COORDINATOR_WAITING_TO_PROCESS_EVENT_COUNT,
-                () -> waitToProcessEventCount);
+                MetricNames.COORDINATOR_WAITING_TO_PROCESS_EVENT_COUNT, queue::size);
 
         finishedEvents = new SimpleCounter();
         coordinatorMetricGroup.meter(MetricNames.EVENT_PROCESS_RATE, new MeterView(finishedEvents));
-    }
-
-    private void updateMetrics() {
-        waitToProcessEventCount = queue.size();
     }
 
     public void start() {
@@ -98,8 +91,6 @@ public final class CoordinatorEventManager implements EventManager {
                         queue.put(event);
                     } catch (InterruptedException e) {
                         LOG.error("Fail to put coordinator event {}.", event, e);
-                    } finally {
-                        updateMetrics();
                     }
                 });
     }
