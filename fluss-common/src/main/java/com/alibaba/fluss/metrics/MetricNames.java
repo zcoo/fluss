@@ -43,6 +43,7 @@ public class MetricNames {
     // for coordinator event processor
     public static final String COORDINATOR_WAITING_TO_PROCESS_EVENT_COUNT =
             "coordinatorWaitToProcessEventCount";
+    public static final String EVENT_PROCESS_RATE = "coordinatorEventProcessRate";
 
     // --------------------------------------------------------------------------------------------
     // metrics for tablet server

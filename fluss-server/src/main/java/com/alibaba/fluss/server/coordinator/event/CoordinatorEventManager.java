@@ -17,7 +17,10 @@
 package com.alibaba.fluss.server.coordinator.event;
 
 import com.alibaba.fluss.annotation.Internal;
+import com.alibaba.fluss.metrics.Counter;
+import com.alibaba.fluss.metrics.MeterView;
 import com.alibaba.fluss.metrics.MetricNames;
+import com.alibaba.fluss.metrics.SimpleCounter;
 import com.alibaba.fluss.server.metrics.group.CoordinatorMetricGroup;
 import com.alibaba.fluss.utils.concurrent.ShutdownableThread;
 
@@ -51,6 +54,7 @@ public final class CoordinatorEventManager implements EventManager {
 
     // metrics
     private volatile int waitToProcessEventCount;
+    private Counter finishedEvents;
 
     public CoordinatorEventManager(
             EventProcessor eventProcessor, CoordinatorMetricGroup coordinatorMetricGroup) {
@@ -63,6 +67,9 @@ public final class CoordinatorEventManager implements EventManager {
         coordinatorMetricGroup.gauge(
                 MetricNames.COORDINATOR_WAITING_TO_PROCESS_EVENT_COUNT,
                 () -> waitToProcessEventCount);
+
+        finishedEvents = new SimpleCounter();
+        coordinatorMetricGroup.meter(MetricNames.EVENT_PROCESS_RATE, new MeterView(finishedEvents));
     }
 
     private void updateMetrics() {
@@ -121,6 +128,8 @@ public final class CoordinatorEventManager implements EventManager {
                 }
             } catch (Throwable e) {
                 log.error("Uncaught error processing event {}.", event, e);
+            } finally {
+                finishedEvents.inc();
             }
         }
     }
