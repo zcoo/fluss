@@ -23,6 +23,7 @@ import com.alibaba.fluss.metrics.MetricNames;
 import com.alibaba.fluss.metrics.SimpleCounter;
 import com.alibaba.fluss.server.metrics.group.CoordinatorMetricGroup;
 import com.alibaba.fluss.utils.concurrent.ShutdownableThread;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
