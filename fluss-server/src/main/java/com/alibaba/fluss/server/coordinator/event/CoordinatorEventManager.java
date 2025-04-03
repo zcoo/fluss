@@ -17,12 +17,9 @@
 package com.alibaba.fluss.server.coordinator.event;
 
 import com.alibaba.fluss.annotation.Internal;
-import com.alibaba.fluss.metrics.Counter;
 import com.alibaba.fluss.metrics.DescriptiveStatisticsHistogram;
 import com.alibaba.fluss.metrics.Histogram;
-import com.alibaba.fluss.metrics.MeterView;
 import com.alibaba.fluss.metrics.MetricNames;
-import com.alibaba.fluss.metrics.SimpleCounter;
 import com.alibaba.fluss.server.metrics.group.CoordinatorMetricGroup;
 import com.alibaba.fluss.utils.concurrent.ShutdownableThread;
 
@@ -55,7 +52,6 @@ public final class CoordinatorEventManager implements EventManager {
     private final Lock putLock = new ReentrantLock();
 
     // metrics
-    private Counter eventProcessRate;
     private Histogram eventProcessTime;
 
     private static final int WINDOW_SIZE = 1024;
@@ -69,10 +65,6 @@ public final class CoordinatorEventManager implements EventManager {
 
     private void registerMetrics() {
         coordinatorMetricGroup.gauge(MetricNames.EVENT_QUEUE_SIZE, queue::size);
-
-        eventProcessRate = new SimpleCounter();
-        coordinatorMetricGroup.meter(
-                MetricNames.EVENT_PROCESS_RATE, new MeterView(eventProcessRate));
 
         eventProcessTime =
                 coordinatorMetricGroup.histogram(
@@ -135,7 +127,6 @@ public final class CoordinatorEventManager implements EventManager {
                 log.error("Uncaught error processing event {}.", event, e);
             } finally {
                 long eventFinishTimeMs = System.currentTimeMillis();
-                eventProcessRate.inc();
                 eventProcessTime.update(eventFinishTimeMs - eventStartTimeMs);
             }
         }
