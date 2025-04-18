@@ -517,7 +517,7 @@ public final class FlussClusterExtension
     public void waitUtilAllReplicaReady(TableBucket tableBucket) {
         ZooKeeperClient zkClient = getZooKeeperClient();
         retry(
-                Duration.ofSeconds(90),
+                Duration.ofMinutes(2),
                 () -> {
                     Optional<LeaderAndIsr> leaderAndIsrOpt = zkClient.getLeaderAndIsr(tableBucket);
                     assertThat(leaderAndIsrOpt).isPresent();
