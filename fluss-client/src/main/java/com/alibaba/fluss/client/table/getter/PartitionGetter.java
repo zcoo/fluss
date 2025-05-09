@@ -27,7 +27,7 @@ import java.util.List;
 import static com.alibaba.fluss.utils.Preconditions.checkArgument;
 import static com.alibaba.fluss.utils.Preconditions.checkNotNull;
 
-/** A getter to get partition name from a row. Support get a name with multiple partitions */
+/** A getter to get partition name from a row. */
 public class PartitionGetter {
 
     private final List<String> partitionKeys;
