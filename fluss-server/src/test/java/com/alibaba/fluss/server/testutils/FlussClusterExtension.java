@@ -57,6 +57,7 @@ import com.alibaba.fluss.server.zk.data.PartitionAssignment;
 import com.alibaba.fluss.server.zk.data.RemoteLogManifestHandle;
 import com.alibaba.fluss.server.zk.data.TableAssignment;
 import com.alibaba.fluss.utils.FileUtils;
+
 import org.apache.curator.test.TestingServer;
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.AfterEachCallback;
@@ -66,6 +67,7 @@ import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 import javax.annotation.Nullable;
+
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
