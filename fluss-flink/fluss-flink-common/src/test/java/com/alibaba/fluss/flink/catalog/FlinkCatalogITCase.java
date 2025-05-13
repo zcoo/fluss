@@ -299,7 +299,7 @@ abstract class FlinkCatalogITCase {
                                 tEnv.executeSql(
                                         "create table test_invalid_auto_partitioned_table_with_multi_partition_keys (a int, b string, c string, dt string) partitioned by (b,c,dt) "
                                                 + "with ('table.auto-partition.enabled' = 'true',"
-                                                + " 'table.auto-partition.time-unit' = 'day',"
+                                                + " 'table.auto-partition.time-unit' = 'day'"
                                                 + ")"))
                 .cause()
                 .isInstanceOf(InvalidTableException.class)
