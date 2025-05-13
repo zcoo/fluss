@@ -226,11 +226,6 @@ public class TableDescriptorValidation {
                                                 + "Your key '%s' is not in key list %s",
                                         autoPartition.key(), partitionKeys));
                     }
-
-                    if (autoPartition.numPreCreate() > 0) {
-                        throw new InvalidTableException(
-                                "For a partition table with multiple partition keys, pre-create is unsupported and this value must be strictly less than or equal to 0.");
-                    }
                 }
 
                 if (autoPartition.timeUnit() == null) {

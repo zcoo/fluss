@@ -1150,8 +1150,7 @@ public class ConfigOptions {
                                     + "If any one partition exists, it'll skip creating the partition. "
                                     + "The default value is 2, which means 2 partitions will be pre-created. "
                                     + "If the 'table.auto-partition.time-unit' is 'DAY'(default), one precreated partition is for today and another one is for tomorrow."
-                                    + "For a partition table with multiple partition keys, pre-create is unsupported and this value must be strictly less than or equal to 0."
-                                    + "This value should be zero if the table has more than one partition key.");
+                                    + "For a partition table with multiple partition keys, pre-create is unsupported and will be set to 0 automatically when creating table if it is not explicitly specified.");
 
     public static final ConfigOption<Integer> TABLE_AUTO_PARTITION_NUM_RETENTION =
             key("table.auto-partition.num-retention")

@@ -388,13 +388,16 @@ public class AutoPartitionManager implements AutoCloseable {
         // 20250506 and 20250507 will be retained.
         //
         // For partition table with multiple partition keys, for example a,dt(yyyyMMdd),b
+        // which means dt is a partition time key and a,b are normal partition key,
         // assuming now is 20250508, and table.auto-partition.num-retention=2.
         // assuming we have the following partitions:
         // (a=1,dt=20250505,b=1) (a=1,dt=20250506,b=1) (a=1,dt=20250507,b=1)
         // (a=2,dt=20250505,b=1) (a=2,dt=20250506,b=1) (a=2,dt=20250507,b=1)
-        // then partition
+        // then partition of pattern:
         // (a=?,dt=20250506,b=?) (a=?,dt=20250507,b=?) will be retained.
         int timePartitionKeyIndex = partitionKeys.indexOf(autoPartitionKey);
+        // Todo: refactoring currentPartitions to sort by the partition time key, then it is
+        // efficient to handle large partition set.
         for (String partitionName : new ArrayList<>(currentPartitions)) {
             String currentTime = partitionName.split("\\$")[timePartitionKeyIndex];
             if (currentTime.compareTo(lastRetainPartitionTime) < 0) {

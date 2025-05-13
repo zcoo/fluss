@@ -19,6 +19,7 @@ package com.alibaba.fluss.flink.catalog;
 import com.alibaba.fluss.cluster.ServerNode;
 import com.alibaba.fluss.config.ConfigOptions;
 import com.alibaba.fluss.config.Configuration;
+import com.alibaba.fluss.exception.InvalidTableException;
 import com.alibaba.fluss.metadata.TablePath;
 import com.alibaba.fluss.server.testutils.FlussClusterExtension;
 
@@ -31,7 +32,6 @@ import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.ObjectPath;
-import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CloseableIterator;
 import org.apache.flink.util.CollectionUtil;
@@ -214,14 +214,14 @@ abstract class FlinkCatalogITCase {
         tEnv.executeSql("alter table test_partitioned_table add partition (b = 2,dt = 1)");
         tEnv.executeSql("alter table test_partitioned_table add partition (b = 3,dt = 1)");
         List<String> expectedShowPartitionsResult =
-                Arrays.asList("+I[dt=1/b=1]", "+I[dt=1/b=2]", "+I[dt=1/b=3]");
+                Arrays.asList("+I[b=1/dt=1]", "+I[b=2/dt=1]", "+I[b=3/dt=1]");
         CloseableIterator<Row> showPartitionIterator =
                 tEnv.executeSql("show partitions test_partitioned_table").collect();
         assertResultsIgnoreOrder(showPartitionIterator, expectedShowPartitionsResult, true);
 
         // 3. drop partitions.
         tEnv.executeSql("alter table test_partitioned_table drop partition (b = 1,dt = 1)");
-        expectedShowPartitionsResult = Arrays.asList("+I[dt=1/b=2]", "+I[dt=1/b=3]");
+        expectedShowPartitionsResult = Arrays.asList("+I[b=2/dt=1]", "+I[b=3/dt=1]");
         showPartitionIterator = tEnv.executeSql("show partitions test_partitioned_table").collect();
         assertResultsIgnoreOrder(showPartitionIterator, expectedShowPartitionsResult, true);
 
@@ -291,62 +291,49 @@ abstract class FlinkCatalogITCase {
     }
 
     @Test
-    void testAutoPartitionedTableWithMultiPartitionKeys() throws Exception {
-        ObjectPath objectPath =
-                new ObjectPath(DEFAULT_DB, "test_auto_partitioned_table_with_multi_partition_keys");
-
+    void testInvalidAutoPartitionedTableWithMultiPartitionKeys() {
         // 1. test invalid auto partition table.
         // not specify auto partition key
         assertThatThrownBy(
                         () ->
                                 tEnv.executeSql(
-                                        "create table test_auto_partitioned_table_with_multi_partition_keys (a int, b string, c string, dt string) partitioned by (b,c,dt) "
+                                        "create table test_invalid_auto_partitioned_table_with_multi_partition_keys (a int, b string, c string, dt string) partitioned by (b,c,dt) "
                                                 + "with ('table.auto-partition.enabled' = 'true',"
                                                 + " 'table.auto-partition.time-unit' = 'day',"
-                                                + " 'table.auto-partition.num-precreate' = '0'"
                                                 + ")"))
                 .cause()
-                .isInstanceOf(CatalogException.class)
+                .isInstanceOf(InvalidTableException.class)
                 .hasMessage(
-                        "Failed to create table fluss.test_auto_partitioned_table_with_multi_partition_keys in testcatalog");
+                        "Currently, auto partitioned table must set one auto partition key when it has multiple partition keys. Please set table property 'table.auto-partition.key'.");
 
         // specified auto partition key not in partition keys
         assertThatThrownBy(
                         () ->
                                 tEnv.executeSql(
-                                        "create table test_auto_partitioned_table_with_multi_partition_keys (a int, b string, c string, dt string) partitioned by (b,c,dt) "
+                                        "create table test_invalid_auto_partitioned_table_with_multi_partition_keys (a int, b string, c string, dt string) partitioned by (b,c,dt) "
                                                 + "with ('table.auto-partition.enabled' = 'true',"
                                                 + " 'table.auto-partition.time-unit' = 'day',"
                                                 + " 'table.auto-partition.key' = 'a',"
-                                                + " 'table.auto-partition.num-precreate' = '0'"
-                                                + ")"))
-                .cause()
-                .isInstanceOf(CatalogException.class)
-                .hasMessage(
-                        "Failed to create table fluss.test_auto_partitioned_table_with_multi_partition_keys in testcatalog");
-
-        // table.auto-partition.num-precreate should be 0 or less
-        assertThatThrownBy(
-                        () ->
-                                tEnv.executeSql(
-                                        "create table test_auto_partitioned_table_with_multi_partition_keys (a int, b string, c string, dt string) partitioned by (b,c,dt) "
-                                                + "with ('table.auto-partition.enabled' = 'true',"
-                                                + " 'table.auto-partition.time-unit' = 'day',"
-                                                + " 'table.auto-partition.key' = 'dt',"
                                                 + " 'table.auto-partition.num-precreate' = '2'"
                                                 + ")"))
                 .cause()
-                .isInstanceOf(CatalogException.class)
+                .isInstanceOf(InvalidTableException.class)
                 .hasMessage(
-                        "Failed to create table fluss.test_auto_partitioned_table_with_multi_partition_keys in testcatalog");
+                        "The specified key for auto partitioned table is not a partition key. Your key 'a' is not in key list [b, c, dt]");
+    }
 
-        // 2. test add table.
+    @Test
+    void testAutoPartitionedTableWithMultiPartitionKeys() throws Exception {
+        ObjectPath objectPath =
+                new ObjectPath(DEFAULT_DB, "test_auto_partitioned_table_with_multi_partition_keys");
+
+        // 1. test add table.
         tEnv.executeSql(
                 "create table test_auto_partitioned_table_with_multi_partition_keys (a int, b string, c string, dt string) partitioned by (b,c,dt) "
                         + "with ('table.auto-partition.enabled' = 'true',"
                         + " 'table.auto-partition.key' = 'dt',"
-                        + " 'table.auto-partition.num-precreate' = '0',"
                         + " 'table.auto-partition.num-retention' = '2',"
+                        + " 'table.auto-partition.num-precreate' = '2',"
                         + " 'table.auto-partition.time-unit' = 'day')");
         Schema.Builder schemaBuilder = Schema.newBuilder();
         schemaBuilder
@@ -359,7 +346,8 @@ abstract class FlinkCatalogITCase {
         assertThat(table.getUnresolvedSchema()).isEqualTo(expectedSchema);
         List<String> partitionKeys = table.getPartitionKeys();
         assertThat(partitionKeys).isEqualTo(Arrays.asList("b", "c", "dt"));
-
+        assertThat(table.getOptions().get(ConfigOptions.TABLE_AUTO_PARTITION_NUM_PRECREATE.key()))
+                .isEqualTo("0");
         TablePath tablePath =
                 new TablePath(DEFAULT_DB, "test_auto_partitioned_table_with_multi_partition_keys");
 
@@ -367,7 +355,7 @@ abstract class FlinkCatalogITCase {
         String minus2day = LocalDate.now().minusDays(2).format(DateTimeFormatter.BASIC_ISO_DATE);
         String minus1day = LocalDate.now().minusDays(1).format(DateTimeFormatter.BASIC_ISO_DATE);
 
-        // 3. test add partitions.
+        // 2. test add partitions.
         tEnv.executeSql(
                 String.format(
                         "alter table test_auto_partitioned_table_with_multi_partition_keys add partition (b = 1,c = 1,dt = %s)",
@@ -392,14 +380,17 @@ abstract class FlinkCatalogITCase {
                 String.format(
                         "alter table test_auto_partitioned_table_with_multi_partition_keys add partition (b = 1,c = 2,dt = %s)",
                         minus1day));
-        FLUSS_CLUSTER_EXTENSION.waitUntilPartitionsDrop(tablePath, 4);
+        List<String> expectDroppedPartitions =
+                Arrays.asList(
+                        String.format("1$1$%s", minus3day), String.format("1$2$%s", minus3day));
+        FLUSS_CLUSTER_EXTENSION.waitUntilPartitionsDropped(tablePath, expectDroppedPartitions);
 
         List<String> expectedShowPartitionsResult =
                 Arrays.asList(
-                        "+I[dt=" + minus1day + "/b=1/c=1]",
-                        "+I[dt=" + minus1day + "/b=1/c=2]",
-                        "+I[dt=" + minus2day + "/b=1/c=1]",
-                        "+I[dt=" + minus2day + "/b=1/c=2]");
+                        "+I[b=1/c=1/dt=" + minus1day + "]",
+                        "+I[b=1/c=2/dt=" + minus1day + "]",
+                        "+I[b=1/c=1/dt=" + minus2day + "]",
+                        "+I[b=1/c=2/dt=" + minus2day + "]");
 
         CloseableIterator<Row> showPartitionIterator =
                 tEnv.executeSql(

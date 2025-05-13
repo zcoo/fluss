@@ -21,7 +21,7 @@ import com.alibaba.fluss.annotation.PublicEvolving;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -76,7 +76,7 @@ public class ResolvedPartitionSpec {
     }
 
     public PartitionSpec toPartitionSpec() {
-        Map<String, String> specMap = new HashMap<>();
+        Map<String, String> specMap = new LinkedHashMap<>();
         for (int i = 0; i < partitionKeys.size(); i++) {
             specMap.put(partitionKeys.get(i), partitionValues.get(i));
         }

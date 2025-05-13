@@ -87,6 +87,7 @@ import javax.annotation.Nullable;
 
 import java.io.UncheckedIOException;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -269,6 +270,14 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         Map<String, String> properties = newDescriptor.getProperties();
         if (!properties.containsKey(ConfigOptions.TABLE_REPLICATION_FACTOR.key())) {
             newDescriptor = newDescriptor.withReplicationFactor(defaultReplicationFactor);
+        }
+
+        // override set num-precreate for auto-partition table with multi-level partition keys
+        if ("true".equals(properties.get(ConfigOptions.TABLE_AUTO_PARTITION_ENABLED.key()))
+                && newDescriptor.getPartitionKeys().size() > 1) {
+            Map<String, String> newProperties = new HashMap<>(newDescriptor.getProperties());
+            newProperties.put(ConfigOptions.TABLE_AUTO_PARTITION_NUM_PRECREATE.key(), "0");
+            newDescriptor = newDescriptor.withProperties(newProperties);
         }
 
         // override the datalake format if the table hasn't set it and the cluster configured
