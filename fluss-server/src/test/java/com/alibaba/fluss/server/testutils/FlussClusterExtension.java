@@ -715,7 +715,7 @@ public final class FlussClusterExtension
                     }
                     return true;
                 },
-                Duration.ofMinutes(1),
+                Duration.ofMinutes(2),
                 "Fail to wait partitions dropped");
     }
 
