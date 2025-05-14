@@ -348,7 +348,6 @@ abstract class FlinkCatalogITCase {
                         + "with ('table.auto-partition.enabled' = 'true',"
                         + " 'table.auto-partition.key' = 'dt',"
                         + " 'table.auto-partition.num-retention' = '2',"
-                        + " 'table.auto-partition.num-precreate' = '2',"
                         + " 'table.auto-partition.time-unit' = 'day')");
         Schema.Builder schemaBuilder = Schema.newBuilder();
         schemaBuilder
