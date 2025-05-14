@@ -22,7 +22,6 @@ import com.alibaba.fluss.config.Configuration;
 import com.alibaba.fluss.exception.InvalidTableException;
 import com.alibaba.fluss.metadata.TablePath;
 import com.alibaba.fluss.server.testutils.FlussClusterExtension;
-
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.Schema;
@@ -43,6 +42,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collections;
@@ -355,60 +355,69 @@ abstract class FlinkCatalogITCase {
         tEnv.executeSql(
                 "create table "
                         + tblName
-                        + " (a int, b string, c string, dt string) partitioned by (b,c,dt) "
+                        + " (a int, b string, c string, hh string) partitioned by (b,c,hh) "
                         + "with ('table.auto-partition.enabled' = 'true',"
-                        + " 'table.auto-partition.key' = 'dt',"
+                        + " 'table.auto-partition.key' = 'hh',"
                         + " 'table.auto-partition.num-retention' = '2',"
-                        + " 'table.auto-partition.time-unit' = 'day')");
+                        + " 'table.auto-partition.time-unit' = 'hour')");
         Schema.Builder schemaBuilder = Schema.newBuilder();
         schemaBuilder
                 .column("a", DataTypes.INT())
                 .column("b", DataTypes.STRING())
                 .column("c", DataTypes.STRING())
-                .column("dt", DataTypes.STRING());
+                .column("hh", DataTypes.STRING());
         Schema expectedSchema = schemaBuilder.build();
         CatalogTable table = (CatalogTable) catalog.getTable(objectPath);
         assertThat(table.getUnresolvedSchema()).isEqualTo(expectedSchema);
         List<String> partitionKeys = table.getPartitionKeys();
-        assertThat(partitionKeys).isEqualTo(Arrays.asList("b", "c", "dt"));
+        assertThat(partitionKeys).isEqualTo(Arrays.asList("b", "c", "hh"));
         assertThat(table.getOptions().get(ConfigOptions.TABLE_AUTO_PARTITION_NUM_PRECREATE.key()))
                 .isEqualTo("0");
         TablePath tablePath = new TablePath(DEFAULT_DB, tblName);
-
-        String minus3day = LocalDate.now().minusDays(3).format(DateTimeFormatter.BASIC_ISO_DATE);
-        String minus2day = LocalDate.now().minusDays(2).format(DateTimeFormatter.BASIC_ISO_DATE);
-        String minus1day = LocalDate.now().minusDays(1).format(DateTimeFormatter.BASIC_ISO_DATE);
+        String datetimePattern = "yyyyMMddHH";
+        String minus3hour =
+                LocalDateTime.now()
+                        .minusHours(3)
+                        .format(DateTimeFormatter.ofPattern(datetimePattern));
+        String minus2hour =
+                LocalDateTime.now()
+                        .minusHours(2)
+                        .format(DateTimeFormatter.ofPattern(datetimePattern));
+        String minus1hour =
+                LocalDateTime.now()
+                        .minusHours(1)
+                        .format(DateTimeFormatter.ofPattern(datetimePattern));
 
         // 2. test add partitions.
         tEnv.executeSql(
                 String.format(
-                        "alter table %s add partition (b = 1,c = 1,dt = %s)", tblName, minus3day));
+                        "alter table %s add partition (b = 1,c = 1,hh = %s)", tblName, minus3hour));
         tEnv.executeSql(
                 String.format(
-                        "alter table %s add partition (b = 1,c = 2,dt = %s)", tblName, minus3day));
+                        "alter table %s add partition (b = 1,c = 2,hh = %s)", tblName, minus3hour));
         tEnv.executeSql(
                 String.format(
-                        "alter table %s add partition (b = 1,c = 1,dt = %s)", tblName, minus2day));
+                        "alter table %s add partition (b = 1,c = 1,hh = %s)", tblName, minus2hour));
         tEnv.executeSql(
                 String.format(
-                        "alter table %s add partition (b = 1,c = 2,dt = %s)", tblName, minus2day));
+                        "alter table %s add partition (b = 1,c = 2,hh = %s)", tblName, minus2hour));
         tEnv.executeSql(
                 String.format(
-                        "alter table %s add partition (b = 1,c = 1,dt = %s)", tblName, minus1day));
+                        "alter table %s add partition (b = 1,c = 1,hh = %s)", tblName, minus1hour));
         tEnv.executeSql(
                 String.format(
-                        "alter table %s add partition (b = 1,c = 2,dt = %s)", tblName, minus1day));
+                        "alter table %s add partition (b = 1,c = 2,hh = %s)", tblName, minus1hour));
         List<String> expectDroppedPartitions =
                 Arrays.asList(
-                        String.format("1$1$%s", minus3day), String.format("1$2$%s", minus3day));
+                        String.format("1$1$%s", minus3hour), String.format("1$2$%s", minus3hour));
         FLUSS_CLUSTER_EXTENSION.waitUntilPartitionsDropped(tablePath, expectDroppedPartitions);
 
         List<String> expectedShowPartitionsResult =
                 Arrays.asList(
-                        "+I[b=1/c=1/dt=" + minus1day + "]",
-                        "+I[b=1/c=2/dt=" + minus1day + "]",
-                        "+I[b=1/c=1/dt=" + minus2day + "]",
-                        "+I[b=1/c=2/dt=" + minus2day + "]");
+                        "+I[b=1/c=1/hh=" + minus1hour + "]",
+                        "+I[b=1/c=2/hh=" + minus1hour + "]",
+                        "+I[b=1/c=1/hh=" + minus2hour + "]",
+                        "+I[b=1/c=2/hh=" + minus2hour + "]");
 
         CloseableIterator<Row> showPartitionIterator =
                 tEnv.executeSql("show partitions " + tblName).collect();
