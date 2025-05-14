@@ -86,8 +86,8 @@ import com.alibaba.fluss.utils.concurrent.FutureUtils;
 import javax.annotation.Nullable;
 
 import java.io.UncheckedIOException;
-import java.util.List;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -273,9 +273,12 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         }
 
         // override set num-precreate for auto-partition table with multi-level partition keys
-        if ("true".equals(properties.get(ConfigOptions.TABLE_AUTO_PARTITION_ENABLED.key()))
-                && newDescriptor.getPartitionKeys().size() > 1) {
+        if (newDescriptor.getPartitionKeys().size() > 1
+                && "true".equals(properties.get(ConfigOptions.TABLE_AUTO_PARTITION_ENABLED.key()))
+                && !properties.containsKey(
+                        ConfigOptions.TABLE_AUTO_PARTITION_NUM_PRECREATE.key())) {
             Map<String, String> newProperties = new HashMap<>(newDescriptor.getProperties());
+            // disable precreate partitions for multi-level partitions.
             newProperties.put(ConfigOptions.TABLE_AUTO_PARTITION_NUM_PRECREATE.key(), "0");
             newDescriptor = newDescriptor.withProperties(newProperties);
         }
