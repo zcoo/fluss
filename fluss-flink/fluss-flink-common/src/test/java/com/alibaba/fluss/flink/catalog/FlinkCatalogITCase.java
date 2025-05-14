@@ -41,6 +41,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
@@ -63,7 +64,17 @@ abstract class FlinkCatalogITCase {
 
     @RegisterExtension
     public static final FlussClusterExtension FLUSS_CLUSTER_EXTENSION =
-            FlussClusterExtension.builder().setNumOfTabletServers(1).build();
+            FlussClusterExtension.builder()
+                    .setNumOfTabletServers(1)
+                    .setClusterConf(initClusterConf())
+                    .build();
+
+    static Configuration initClusterConf() {
+        Configuration clusterConf = new Configuration();
+        // use a small check interval to cleanup partitions quickly
+        clusterConf.set(ConfigOptions.AUTO_PARTITION_CHECK_INTERVAL, Duration.ofSeconds(3));
+        return clusterConf;
+    }
 
     static final String CATALOG_NAME = "testcatalog";
     static final String DEFAULT_DB = FlinkCatalogOptions.DEFAULT_DATABASE.defaultValue();

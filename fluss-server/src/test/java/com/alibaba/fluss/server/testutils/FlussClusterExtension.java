@@ -715,7 +715,7 @@ public final class FlussClusterExtension
                     }
                     return true;
                 },
-                Duration.ofMinutes(2),
+                Duration.ofMinutes(1),
                 "Fail to wait partitions dropped");
     }
 
@@ -759,8 +759,6 @@ public final class FlussClusterExtension
             // reduce testing resources
             clusterConf.set(ConfigOptions.NETTY_SERVER_NUM_NETWORK_THREADS, 1);
             clusterConf.set(ConfigOptions.NETTY_SERVER_NUM_WORKER_THREADS, 3);
-            // save wait time
-            clusterConf.set(ConfigOptions.AUTO_PARTITION_CHECK_INTERVAL, Duration.ofSeconds(30));
         }
 
         /** Sets the number of tablet servers. */
