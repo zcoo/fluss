@@ -114,8 +114,14 @@ public class TableBucketStateMachine {
     public void handleStateChange(Set<TableBucket> tableBuckets, BucketState targetState) {
         try {
             coordinatorRequestBatch.newBatch();
-            for (TableBucket tableBucket : tableBuckets) {
-                doHandleStateChange(tableBucket, targetState);
+
+            if (checkIfCreateTablePartitionRequest(tableBuckets, targetState)) {
+                // batch register table bucket lead and isr
+                batchHandleOnlineChangeAndInitLeader(tableBuckets);
+            } else {
+                for (TableBucket tableBucket : tableBuckets) {
+                    doHandleStateChange(tableBucket, targetState);
+                }
             }
             coordinatorRequestBatch.sendRequestToTabletServers(
                     coordinatorContext.getCoordinatorEpoch());
@@ -223,7 +229,25 @@ public class TableBucketStateMachine {
         }
     }
 
-    public void batchInitLeaderForTableBuckets(Set<TableBucket> tableBuckets) {
+    private boolean checkIfCreateTablePartitionRequest(
+            Set<TableBucket> tableBuckets, BucketState targetState) {
+        // Check if the state is from NewBucket -> OnlineBucket
+        // and all buckets belong to a specific table (partition).
+        // If so, we will merge the register zk requests to speed up
+        if (targetState != BucketState.OnlineBucket) {
+            return false;
+        }
+
+        for (TableBucket tableBucket : tableBuckets) {
+            BucketState currentState = coordinatorContext.getBucketState(tableBucket);
+            if (currentState != BucketState.NewBucket) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public void batchHandleOnlineChangeAndInitLeader(Set<TableBucket> tableBuckets) {
         List<RegisterTableBucketLeadAndIsrInfo> tableBucketLeadAndIsrInfos = new ArrayList<>();
 
         for (TableBucket tableBucket : tableBuckets) {
