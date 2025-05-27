@@ -29,7 +29,6 @@ import com.alibaba.fluss.server.coordinator.statemachine.TableBucketStateMachine
 import com.alibaba.fluss.server.zk.data.BucketAssignment;
 import com.alibaba.fluss.server.zk.data.PartitionAssignment;
 import com.alibaba.fluss.server.zk.data.TableAssignment;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -151,6 +150,8 @@ public class TableManager {
         Set<TableBucketReplica> replicas = coordinatorContext.getBucketReplicas(tableBuckets);
         // transmit all the replicas to state NewReplica
         replicaStateMachine.handleStateChanges(replicas, ReplicaState.NewReplica);
+        // batch register table bucket lead and isr
+        tableBucketStateMachine.batchInitLeaderForTableBuckets(tableBuckets);
         // transmit it to state Online
         tableBucketStateMachine.handleStateChange(tableBuckets, BucketState.OnlineBucket);
         // transmit all the replicas to state online
