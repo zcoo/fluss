@@ -49,6 +49,7 @@ public class RegisterTableBucketLeadAndIsrInfo {
         return leaderAndIsr;
     }
 
+    @Nullable
     public String getPartitionName() {
         return partitionName;
     }

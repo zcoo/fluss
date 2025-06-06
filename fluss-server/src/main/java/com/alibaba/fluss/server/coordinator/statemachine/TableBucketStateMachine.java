@@ -286,21 +286,20 @@ public class TableBucketStateMachine {
             TableBucket tableBucket, List<Integer> assignedServers) {
         Optional<ElectionResult> optionalElectionResult =
                 doInitElectionForBucket(tableBucket, assignedServers);
-        if (!optionalElectionResult.isPresent()) {
-            return optionalElectionResult;
+        if (optionalElectionResult.isPresent()) {
+            ElectionResult electionResult = optionalElectionResult.get();
+            LeaderAndIsr leaderAndIsr = electionResult.leaderAndIsr;
+            try {
+                zooKeeperClient.registerLeaderAndIsr(tableBucket, leaderAndIsr);
+            } catch (Exception e) {
+                LOG.error(
+                        "Fail to create state node for table bucket {} in zookeeper.",
+                        stringifyBucket(tableBucket),
+                        e);
+                return Optional.empty();
+            }
+            coordinatorContext.putBucketLeaderAndIsr(tableBucket, leaderAndIsr);
         }
-        ElectionResult electionResult = optionalElectionResult.get();
-        LeaderAndIsr leaderAndIsr = electionResult.leaderAndIsr;
-        try {
-            zooKeeperClient.registerLeaderAndIsr(tableBucket, leaderAndIsr);
-        } catch (Exception e) {
-            LOG.error(
-                    "Fail to create state node for table bucket {} in zookeeper.",
-                    stringifyBucket(tableBucket),
-                    e);
-            return Optional.empty();
-        }
-        coordinatorContext.putBucketLeaderAndIsr(tableBucket, leaderAndIsr);
         return optionalElectionResult;
     }
 
