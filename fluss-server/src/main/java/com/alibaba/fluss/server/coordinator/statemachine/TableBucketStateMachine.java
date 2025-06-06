@@ -34,6 +34,7 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -273,7 +274,7 @@ public class TableBucketStateMachine {
             }
 
             if (tableBucket.getTableId() != first.getTableId()
-                    || !tableBucket.getPartitionId().equals(first.getPartitionId())) {
+                    || !Objects.equals(tableBucket.getPartitionId(), first.getPartitionId())) {
                 // not belong to the same table(partition).
                 return false;
             }
