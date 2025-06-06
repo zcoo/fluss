@@ -19,19 +19,21 @@ package com.alibaba.fluss.server.entity;
 import com.alibaba.fluss.metadata.TableBucket;
 import com.alibaba.fluss.server.zk.data.LeaderAndIsr;
 
+import javax.annotation.Nullable;
+
 import java.util.List;
 
 /** The data for register LeaderAndIsr in zk. */
 public class RegisterTableBucketLeadAndIsrInfo {
-    private TableBucket tableBucket;
-    private LeaderAndIsr leaderAndIsr;
-    private String partitionName;
-    private List<Integer> liveReplicas;
+    private final TableBucket tableBucket;
+    private final LeaderAndIsr leaderAndIsr;
+    @Nullable private final String partitionName;
+    private final List<Integer> liveReplicas;
 
     public RegisterTableBucketLeadAndIsrInfo(
             TableBucket tableBucket,
             LeaderAndIsr leaderAndIsr,
-            String partitionName,
+            @Nullable String partitionName,
             List<Integer> liveReplicas) {
         this.tableBucket = tableBucket;
         this.leaderAndIsr = leaderAndIsr;

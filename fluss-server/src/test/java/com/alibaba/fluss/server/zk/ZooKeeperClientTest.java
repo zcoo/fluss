@@ -201,7 +201,8 @@ class ZooKeeperClientTest {
                     new LeaderAndIsr(i, 10, Arrays.asList(i + 1, i + 2, i + 3), 100, 1000);
             partitionleaderAndIsrList.add(leaderAndIsr);
             partitionTableBucket.add(
-                    new RegisterTableBucketLeadAndIsrInfo(tableBucket, leaderAndIsr, null, null));
+                    new RegisterTableBucketLeadAndIsrInfo(
+                            tableBucket, leaderAndIsr, "partition" + i, null));
         }
 
         zookeeperClient.batchRegisterLeaderAndIsrForTablePartition(partitionTableBucket);

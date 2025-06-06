@@ -94,7 +94,7 @@ public class ZooKeeperClient implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(ZooKeeperClient.class);
     public static final int UNKNOWN_VERSION = -2;
-    public static final int MAX_BATCH_SIZE = 1000;
+    private static final int MAX_BATCH_SIZE = 1024;
     private final CuratorFrameworkWithUnhandledErrorListener curatorFrameworkWrapper;
 
     private final CuratorFramework zkClient;
@@ -249,17 +249,21 @@ public class ZooKeeperClient implements AutoCloseable {
 
     public void batchRegisterLeaderAndIsrForTablePartition(
             List<RegisterTableBucketLeadAndIsrInfo> registerList) throws Exception {
+        if (registerList.isEmpty()) {
+            return;
+        }
+
         List<CuratorOp> ops = new ArrayList<>(registerList.size());
         // In transaction API, it is not allowed to use "creatingParentsIfNeeded()"
-        // So we have to ensure the parent dictionaries exist.
-        // A hack logic is to use non-transaction API to create one LeadAndIsr (which will
-        // automatically create parent dictionaries recursively)
-        // and then use transaction API.
+        // So we have to create parent dictionary in advance.
         RegisterTableBucketLeadAndIsrInfo firstInfo = registerList.get(0);
-        registerLeaderAndIsr(firstInfo.getTableBucket(), firstInfo.getLeaderAndIsr());
+        String bucketsParentPath = BucketIdsZNode.path(firstInfo.getTableBucket());
+        zkClient.create()
+                .creatingParentsIfNeeded()
+                .withMode(CreateMode.PERSISTENT)
+                .forPath(bucketsParentPath);
 
-        for (int i = 1; i < registerList.size(); i++) {
-            RegisterTableBucketLeadAndIsrInfo info = registerList.get(i);
+        for (RegisterTableBucketLeadAndIsrInfo info : registerList) {
             byte[] data = LeaderAndIsrZNode.encode(info.getLeaderAndIsr());
             // create direct parent node
             CuratorOp parentNodeCreate =
