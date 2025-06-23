@@ -620,6 +620,8 @@ public class CoordinatorEventProcessor implements EventProcessor {
             lakeTableTieringManager.removeLakeTable(tableId);
         }
 
+        // Try to resume in case of no replica was deleted but table was deleted
+        // for example a partitioned table without any partition.
         tableManager.resumeDeletions();
 
         // send update metadata request.
