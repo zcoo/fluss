@@ -519,6 +519,62 @@ public class ZooKeeperClient implements AutoCloseable {
         zkClient.delete().forPath(path);
     }
 
+    /** Register partition assignment and metadata in transaction. */
+    public void registerPartitionAssignmentAndMetadata(
+            long partitionId,
+            PartitionAssignment partitionAssignment,
+            TablePath tablePath,
+            long tableId,
+            String partitionName)
+            throws Exception {
+        // Merge "registerPartitionAssignment()" and "registerPartition()"
+        // into one transaction. This is to avoid the case that the partition assignment is
+        // registered
+        // but the partition metadata is not registered.
+
+        // Create parent dictionary in advance.
+        try {
+            String tabletServerPartitionParentPath = ZkData.PartitionIdsZNode.path();
+            zkClient.create()
+                    .creatingParentsIfNeeded()
+                    .withMode(CreateMode.PERSISTENT)
+                    .forPath(tabletServerPartitionParentPath);
+        } catch (KeeperException.NodeExistsException e) {
+            // ignore
+        }
+        try {
+            String metadataPartitionParentPath = PartitionsZNode.path(tablePath);
+            zkClient.create()
+                    .creatingParentsIfNeeded()
+                    .withMode(CreateMode.PERSISTENT)
+                    .forPath(metadataPartitionParentPath);
+        } catch (KeeperException.NodeExistsException e) {
+            // ignore
+        }
+
+        List<CuratorOp> ops = new ArrayList<>(2);
+        String tabletServerPartitionPath = PartitionIdZNode.path(partitionId);
+        CuratorOp tabletServerPartitionNode =
+                zkClient.transactionOp()
+                        .create()
+                        .withMode(CreateMode.PERSISTENT)
+                        .forPath(
+                                tabletServerPartitionPath,
+                                PartitionIdZNode.encode(partitionAssignment));
+
+        String metadataPath = PartitionZNode.path(tablePath, partitionName);
+        CuratorOp metadataPartitionNode =
+                zkClient.transactionOp()
+                        .create()
+                        .withMode(CreateMode.PERSISTENT)
+                        .forPath(
+                                metadataPath,
+                                PartitionZNode.encode(new TablePartition(tableId, partitionId)));
+
+        ops.add(tabletServerPartitionNode);
+        ops.add(metadataPartitionNode);
+        zkClient.transaction().forOperations(ops);
+    }
     // --------------------------------------------------------------------------------------------
     // Schema
     // --------------------------------------------------------------------------------------------
