@@ -190,16 +190,6 @@ public class ZooKeeperClient implements AutoCloseable {
         LOG.info("Registered table assignment {} for table id {}.", tableAssignment, tableId);
     }
 
-    /** Register partition assignment to ZK. */
-    public void registerPartitionAssignment(
-            long partitionId, PartitionAssignment partitionAssignment) throws Exception {
-        String path = PartitionIdZNode.path(partitionId);
-        zkClient.create()
-                .creatingParentsIfNeeded()
-                .withMode(CreateMode.PERSISTENT)
-                .forPath(path, PartitionIdZNode.encode(partitionAssignment));
-    }
-
     /** Get the table assignment in ZK. */
     public Optional<TableAssignment> getTableAssignment(long tableId) throws Exception {
         Optional<byte[]> bytes = getOrEmpty(TableIdZNode.path(tableId));
@@ -502,17 +492,6 @@ public class ZooKeeperClient implements AutoCloseable {
         return stat.getNumChildren();
     }
 
-    /** Create a partition for a table in ZK. */
-    public void registerPartition(
-            TablePath tablePath, long tableId, String partitionName, long partitionId)
-            throws Exception {
-        String path = PartitionZNode.path(tablePath, partitionName);
-        zkClient.create()
-                .creatingParentsIfNeeded()
-                .withMode(CreateMode.PERSISTENT)
-                .forPath(path, PartitionZNode.encode(new TablePartition(tableId, partitionId)));
-    }
-
     /** Delete a partition for a table in ZK. */
     public void deletePartition(TablePath tablePath, String partitionName) throws Exception {
         String path = PartitionZNode.path(tablePath, partitionName);
@@ -522,10 +501,10 @@ public class ZooKeeperClient implements AutoCloseable {
     /** Register partition assignment and metadata in transaction. */
     public void registerPartitionAssignmentAndMetadata(
             long partitionId,
+            String partitionName,
             PartitionAssignment partitionAssignment,
             TablePath tablePath,
-            long tableId,
-            String partitionName)
+            long tableId)
             throws Exception {
         // Merge "registerPartitionAssignment()" and "registerPartition()"
         // into one transaction. This is to avoid the case that the partition assignment is

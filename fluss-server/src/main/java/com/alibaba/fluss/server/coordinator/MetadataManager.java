@@ -440,7 +440,7 @@ public class MetadataManager {
             long partitionId = zookeeperClient.getPartitionIdAndIncrement();
             // register partition assignments and partition metadata to zk in transaction
             zookeeperClient.registerPartitionAssignmentAndMetadata(
-                    partitionId, partitionAssignment, tablePath, tableId, partitionName);
+                    partitionId, partitionName, partitionAssignment, tablePath, tableId);
             LOG.info(
                     "Register partition {} to zookeeper for table [{}].", partitionName, tablePath);
         } catch (KeeperException.NodeExistsException nodeExistsException) {
