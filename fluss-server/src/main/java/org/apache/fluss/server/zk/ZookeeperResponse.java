@@ -17,6 +17,7 @@
 
 package com.apache.fluss.server.zk;
 
+/** ZooKeeper response for async fetch path data. */
 public class ZookeeperResponse {
     private String path;
     private boolean success;
