@@ -111,16 +111,21 @@ public class ZooKeeperClient implements AutoCloseable {
     private final ZkSequenceIDCounter partitionIdCounter;
     private final ZkSequenceIDCounter writerIdCounter;
 
-    private final int maxInFlightRequests = 100;
-    private final Semaphore inFlightRequests = new Semaphore(maxInFlightRequests);
+    private final Semaphore inFlightRequests;
 
-    public ZooKeeperClient(CuratorFrameworkWithUnhandledErrorListener curatorFrameworkWrapper) {
+    public ZooKeeperClient(
+            CuratorFrameworkWithUnhandledErrorListener curatorFrameworkWrapper,
+            Configuration configuration) {
         this.curatorFrameworkWrapper = curatorFrameworkWrapper;
         this.zkClient = curatorFrameworkWrapper.asCuratorFramework();
         this.tableIdCounter = new ZkSequenceIDCounter(zkClient, TableSequenceIdZNode.path());
         this.partitionIdCounter =
                 new ZkSequenceIDCounter(zkClient, PartitionSequenceIdZNode.path());
         this.writerIdCounter = new ZkSequenceIDCounter(zkClient, WriterIdZNode.path());
+
+        int maxInFlightRequests =
+                configuration.getInt(ConfigOptions.ZOOKEEPER_MAX_INFLIGHT_REQUESTS);
+        this.inFlightRequests = new Semaphore(maxInFlightRequests);
     }
 
     public Optional<byte[]> getOrEmpty(String path) throws Exception {
