@@ -15,20 +15,20 @@
  * limitations under the License.
  */
 
-package com.apache.fluss.server.zk;
+package org.apache.fluss.server.zk;
 
 /** ZooKeeper response for async fetch path data. */
-public class ZookeeperResponse {
+public class ZookeeperGetDataResponse {
     private String path;
     private boolean success;
     private byte[] data;
 
-    public ZookeeperResponse(String path, boolean success) {
+    public ZookeeperGetDataResponse(String path, boolean success) {
         this.path = path;
         this.success = success;
     }
 
-    public ZookeeperResponse(String path, boolean success, byte[] data) {
+    public ZookeeperGetDataResponse(String path, boolean success, byte[] data) {
         this.path = path;
         this.success = success;
         this.data = data;
