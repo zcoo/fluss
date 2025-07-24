@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static com.alibaba.fluss.testutils.common.CommonTestUtils.retry;
+import static com.alibaba.fluss.testutils.common.CommonTestUtils.waitUtil;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -144,8 +145,19 @@ public abstract class ServerTestBase {
     }
 
     public static CoordinatorServer startCoordinatorServer(Configuration conf) throws Exception {
+        conf.set(ConfigOptions.COORDINATOR_ID, 0);
         CoordinatorServer coordinatorServer = new CoordinatorServer(conf);
         coordinatorServer.start();
+        waitUntilCoordinatorLeaderElected();
         return coordinatorServer;
+    }
+
+    private static void waitUntilCoordinatorLeaderElected() {
+        waitUtil(
+                () -> {
+                    return zookeeperClient.getCoordinatorAddress().isPresent();
+                },
+                Duration.ofSeconds(30),
+                "Fail to wait coordinator server elected");
     }
 }
