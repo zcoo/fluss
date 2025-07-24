@@ -46,9 +46,9 @@ public class CommonTestUtils {
     /**
      * Wait until the given condition is met or timeout.
      *
-     * <p>Note: use {@code #waitUntil(ThrowingSupplier, Duration, String)} if waiting test to reach a
-     * condition and no assertion is needed. Otherwise, use {@link #retry(Duration, Executable)} if
-     * the there is assertion expected to succeed eventually.
+     * <p>Note: use {@code #waitUntil(ThrowingSupplier, Duration, String)} if waiting test to reach
+     * a condition and no assertion is needed. Otherwise, use {@link #retry(Duration, Executable)}
+     * if the there is assertion expected to succeed eventually.
      *
      * @param condition the condition to wait for.
      * @param timeout the maximum time to wait for the condition to become true.
@@ -85,9 +85,9 @@ public class CommonTestUtils {
     /**
      * Wait until the given condition is met or timeout.
      *
-     * <p>Note: use {@code #waitUntil(ThrowingSupplier, Duration, String)} if waiting test to reach a
-     * condition and no assertion is needed. Otherwise, use {@link #retry(Duration, Executable)} if
-     * the there is assertion expected to succeed eventually.
+     * <p>Note: use {@code #waitUntil(ThrowingSupplier, Duration, String)} if waiting test to reach
+     * a condition and no assertion is needed. Otherwise, use {@link #retry(Duration, Executable)}
+     * if the there is assertion expected to succeed eventually.
      *
      * @param condition the condition to wait for.
      * @param timeout the maximum time to wait for the condition to become true.

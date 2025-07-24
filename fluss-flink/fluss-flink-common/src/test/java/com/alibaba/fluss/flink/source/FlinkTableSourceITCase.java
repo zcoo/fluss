@@ -565,7 +565,8 @@ abstract class FlinkTableSourceITCase extends AbstractTestBase {
         if (partitionName == null) {
             waitUntilAllBucketFinishSnapshot(admin, tablePath);
         } else {
-            waitUntilAllBucketFinishSnapshot(admin, tablePath, Collections.singleton(partitionName));
+            waitUntilAllBucketFinishSnapshot(
+                    admin, tablePath, Collections.singleton(partitionName));
         }
         CLOCK.advanceTime(Duration.ofMillis(100));
 
