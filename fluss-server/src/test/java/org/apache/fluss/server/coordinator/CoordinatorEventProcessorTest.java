@@ -174,7 +174,7 @@ class CoordinatorEventProcessorTest {
         // register coordinator server
         zookeeperClient.registerCoordinatorLeader(
                 new CoordinatorAddress(
-                        "2", Endpoint.fromListenersString("CLIENT://localhost:10012")));
+                        2, Endpoint.fromListenersString("CLIENT://localhost:10012")));
 
         // register 3 tablet servers
         for (int i = 0; i < 3; i++) {
@@ -1060,7 +1060,7 @@ class CoordinatorEventProcessorTest {
                 zookeeperClient,
                 serverMetadataCache,
                 testCoordinatorChannelManager,
-                new CoordinatorContext(),
+                new TestCoordinatorContext(),
                 autoPartitionManager,
                 lakeTableTieringManager,
                 TestingMetricGroups.COORDINATOR_METRICS,
