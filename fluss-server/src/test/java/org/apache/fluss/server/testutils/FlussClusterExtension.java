@@ -264,7 +264,7 @@ public final class FlussClusterExtension
             setRemoteDataDir(conf);
             coordinatorServer = new CoordinatorServer(conf);
             coordinatorServer.start();
-            waitUntilCoordinatorServerElected();
+            waitUntilCoordinatorLeaderElected();
             coordinatorServerInfo =
                     // TODO, Currently, we use 0 as coordinator server id.
                     new ServerInfo(
@@ -275,6 +275,7 @@ public final class FlussClusterExtension
         } else {
             // start the existing coordinator server
             coordinatorServer.start();
+            waitUntilCoordinatorLeaderElected();
             coordinatorServerInfo =
                     new ServerInfo(
                             0,
@@ -502,7 +503,7 @@ public final class FlussClusterExtension
                 () -> serverNode, rpcClient, TabletServerGateway.class);
     }
 
-    private void waitUntilCoordinatorServerElected() {
+    private void waitUntilCoordinatorLeaderElected() {
         waitUtil(
                 () -> {
                     return zooKeeperClient.getCoordinatorAddress().isPresent();
