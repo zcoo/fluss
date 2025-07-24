@@ -252,8 +252,6 @@ public final class ZkData {
      * The znode for alive coordinators. The znode path is:
      *
      * <p>/coordinators/ids
-     *
-     * <p>Note: leader coordinator for znode "/coordinators/leader".
      */
     public static final class CoordinatorIdsZNode {
         public static String path() {
