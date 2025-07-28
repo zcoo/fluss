@@ -128,6 +128,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -171,6 +172,7 @@ public class CoordinatorEventProcessor implements EventProcessor {
     private final LakeTableTieringManager lakeTableTieringManager;
     private final TableChangeWatcher tableChangeWatcher;
     private final CoordinatorChannelManager coordinatorChannelManager;
+    private final CoordinatorServerChangeWatcher coordinatorServerChangeWatcher;
     private final TabletServerChangeWatcher tabletServerChangeWatcher;
     private final CoordinatorMetadataCache serverMetadataCache;
     private final CoordinatorRequestBatch coordinatorRequestBatch;
@@ -223,6 +225,8 @@ public class CoordinatorEventProcessor implements EventProcessor {
                         tableBucketStateMachine,
                         new RemoteStorageCleaner(conf, ioExecutor),
                         ioExecutor);
+        this.coordinatorServerChangeWatcher =
+                new CoordinatorServerChangeWatcher(zooKeeperClient, coordinatorEventManager);
         this.tableChangeWatcher = new TableChangeWatcher(zooKeeperClient, coordinatorEventManager);
         this.tabletServerChangeWatcher =
                 new TabletServerChangeWatcher(zooKeeperClient, coordinatorEventManager);
@@ -260,6 +264,7 @@ public class CoordinatorEventProcessor implements EventProcessor {
     public void startup() {
         coordinatorContext.setCoordinatorServerInfo(getCoordinatorServerInfo());
         // start watchers first so that we won't miss node in zk;
+        coordinatorServerChangeWatcher.start();
         tabletServerChangeWatcher.start();
         tableChangeWatcher.start();
         LOG.info("Initializing coordinator context.");
@@ -303,7 +308,7 @@ public class CoordinatorEventProcessor implements EventProcessor {
     private ServerInfo getCoordinatorServerInfo() {
         try {
             return zooKeeperClient
-                    .getCoordinatorAddress()
+                    .getCoordinatorLeaderAddress()
                     .map(
                             coordinatorAddress ->
                                     // TODO we set id to 0 as that CoordinatorServer don't support
@@ -331,6 +336,11 @@ public class CoordinatorEventProcessor implements EventProcessor {
 
     private void initCoordinatorContext() throws Exception {
         long start = System.currentTimeMillis();
+        // get all coordinator servers
+        int[] currentCoordinatorServers = zooKeeperClient.getCoordinatorServerList();
+        coordinatorContext.setLiveCoordinatorServers(
+                Arrays.stream(currentCoordinatorServers).boxed().collect(Collectors.toSet()));
+
         // get all tablet server's
         int[] currentServers = zooKeeperClient.getSortedTabletServerList();
         List<ServerInfo> tabletServerInfos = new ArrayList<>();
@@ -545,6 +555,7 @@ public class CoordinatorEventProcessor implements EventProcessor {
         tableManager.shutdown();
 
         // then stop watchers
+        coordinatorServerChangeWatcher.stop();
         tableChangeWatcher.stop();
         tabletServerChangeWatcher.stop();
     }
@@ -569,6 +580,10 @@ public class CoordinatorEventProcessor implements EventProcessor {
                     (NotifyLeaderAndIsrResponseReceivedEvent) event);
         } else if (event instanceof DeleteReplicaResponseReceivedEvent) {
             processDeleteReplicaResponseReceived((DeleteReplicaResponseReceivedEvent) event);
+        } else if (event instanceof NewCoordinatorServerEvent) {
+            processNewCoordinatorServer((NewCoordinatorServerEvent) event);
+        } else if (event instanceof DeadCoordinatorServerEvent) {
+            processDeadCoordinatorServer((DeadCoordinatorServerEvent) event);
         } else if (event instanceof NewTabletServerEvent) {
             processNewTabletServer((NewTabletServerEvent) event);
         } else if (event instanceof DeadTabletServerEvent) {
@@ -997,6 +1012,29 @@ public class CoordinatorEventProcessor implements EventProcessor {
         replicaStateMachine.handleStateChanges(offlineReplicas, OfflineReplica);
     }
 
+    private void processNewCoordinatorServer(NewCoordinatorServerEvent newCoordinatorServerEvent) {
+        int coordinatorServerId = newCoordinatorServerEvent.getServerId();
+        if (coordinatorContext.getLiveCoordinatorServers().contains(coordinatorServerId)) {
+            return;
+        }
+
+        // process new coordinator server
+        LOG.info("New coordinator server callback for coordinator server {}", coordinatorServerId);
+
+        coordinatorContext.addLiveCoordinatorServer(coordinatorServerId);
+    }
+
+    private void processDeadCoordinatorServer(
+            DeadCoordinatorServerEvent deadCoordinatorServerEvent) {
+        int coordinatorServerId = deadCoordinatorServerEvent.getServerId();
+        if (!coordinatorContext.getLiveCoordinatorServers().contains(coordinatorServerId)) {
+            return;
+        }
+        // process dead coordinator server
+        LOG.info("Coordinator server failure callback for {}.", coordinatorServerId);
+        coordinatorContext.removeLiveCoordinatorServer(coordinatorServerId);
+    }
+
     private void processNewTabletServer(NewTabletServerEvent newTabletServerEvent) {
         // NOTE: we won't need to detect bounced tablet servers like Kafka as we won't
         // miss the event of tablet server un-register and register again since we can
@@ -1019,7 +1057,7 @@ public class CoordinatorEventProcessor implements EventProcessor {
             // it may happen during coordinator server initiation, the watcher watch a new tablet
             // server register event and put it to event manager, but after that, the coordinator
             // server read
-            // all tablet server nodes registered which contain the tablet server a; in this case,
+            // all tablet server nodes registered which contain the tablet server; in this case,
             // we can ignore it.
             return;
         }
