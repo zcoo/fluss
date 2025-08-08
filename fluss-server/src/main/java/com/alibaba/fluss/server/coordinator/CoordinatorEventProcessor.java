@@ -62,6 +62,7 @@ import com.alibaba.fluss.server.coordinator.event.NotifyLeaderAndIsrResponseRece
 import com.alibaba.fluss.server.coordinator.event.watcher.CoordinatorServerChangeWatcher;
 import com.alibaba.fluss.server.coordinator.event.watcher.TableChangeWatcher;
 import com.alibaba.fluss.server.coordinator.event.watcher.TabletServerChangeWatcher;
+import com.alibaba.fluss.server.coordinator.statemachine.ReplicaState;
 import com.alibaba.fluss.server.coordinator.statemachine.ReplicaStateMachine;
 import com.alibaba.fluss.server.coordinator.statemachine.TableBucketStateMachine;
 import com.alibaba.fluss.server.entity.AdjustIsrResultForBucket;
@@ -139,14 +140,6 @@ public class CoordinatorEventProcessor implements EventProcessor {
 
     private final CompletedSnapshotStoreManager completedSnapshotStoreManager;
 
-    // metrics
-    private volatile int aliveCoordinatorServerCount;
-    private volatile int tabletServerCount;
-    private volatile int offlineBucketCount;
-    private volatile int tableCount;
-    private volatile int bucketCount;
-    private volatile int replicasToDeleteCount;
-
     public CoordinatorEventProcessor(
             ZooKeeperClient zooKeeperClient,
             CoordinatorMetadataCache serverMetadataCache,
@@ -204,20 +197,6 @@ public class CoordinatorEventProcessor implements EventProcessor {
         this.lakeTableTieringManager = lakeTableTieringManager;
         this.coordinatorMetricGroup = coordinatorMetricGroup;
         this.internalListenerName = conf.getString(ConfigOptions.INTERNAL_LISTENER_NAME);
-        registerMetrics();
-    }
-
-    private void registerMetrics() {
-        coordinatorMetricGroup.gauge(MetricNames.ACTIVE_COORDINATOR_COUNT, () -> 1);
-        coordinatorMetricGroup.gauge(
-                MetricNames.ALIVE_COORDINATOR_COUNT, () -> aliveCoordinatorServerCount);
-        coordinatorMetricGroup.gauge(
-                MetricNames.ACTIVE_TABLET_SERVER_COUNT, () -> tabletServerCount);
-        coordinatorMetricGroup.gauge(MetricNames.OFFLINE_BUCKET_COUNT, () -> offlineBucketCount);
-        coordinatorMetricGroup.gauge(MetricNames.BUCKET_COUNT, () -> bucketCount);
-        coordinatorMetricGroup.gauge(MetricNames.TABLE_COUNT, () -> tableCount);
-        coordinatorMetricGroup.gauge(
-                MetricNames.REPLICAS_TO_DELETE_COUNT, () -> replicasToDeleteCount);
     }
 
     public CoordinatorEventManager getCoordinatorEventManager() {
@@ -515,33 +494,6 @@ public class CoordinatorEventProcessor implements EventProcessor {
         } else {
             LOG.warn("Unknown event type: {}", event.getClass().getName());
         }
-    }
-
-    private void updateMetrics() {
-        aliveCoordinatorServerCount = coordinatorContext.getLiveCoordinatorServers().size();
-        tabletServerCount = coordinatorContext.getLiveTabletServers().size();
-        tableCount = coordinatorContext.allTables().size();
-        bucketCount = coordinatorContext.bucketLeaderAndIsr().size();
-        offlineBucketCount = coordinatorContext.getOfflineBucketCount();
-
-        int replicasToDeletes = 0;
-        // for replica in partitions to be deleted
-        for (TablePartition tablePartition : coordinatorContext.getPartitionsToBeDeleted()) {
-            for (TableBucketReplica replica :
-                    coordinatorContext.getAllReplicasForPartition(
-                            tablePartition.getTableId(), tablePartition.getPartitionId())) {
-                replicasToDeletes =
-                        isReplicaToDelete(replica) ? replicasToDeletes + 1 : replicasToDeletes;
-            }
-        }
-        // for replica in tables to be deleted
-        for (long tableId : coordinatorContext.getTablesToBeDeleted()) {
-            for (TableBucketReplica replica : coordinatorContext.getAllReplicasForTable(tableId)) {
-                replicasToDeletes =
-                        isReplicaToDelete(replica) ? replicasToDeletes + 1 : replicasToDeletes;
-            }
-        }
-        this.replicasToDeleteCount = replicasToDeletes;
     }
 
     private boolean isReplicaToDelete(TableBucketReplica replica) {
