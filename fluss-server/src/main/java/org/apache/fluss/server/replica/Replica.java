@@ -76,7 +76,7 @@ import org.apache.fluss.server.log.checkpoint.OffsetCheckpointFile;
 import org.apache.fluss.server.log.remote.RemoteLogManager;
 import org.apache.fluss.server.metadata.ServerMetadataCache;
 import org.apache.fluss.server.metrics.group.BucketMetricGroup;
-import org.apache.fluss.server.metrics.group.PhysicalTableMetricGroup;
+import org.apache.fluss.server.metrics.group.TableMetricGroup;
 import org.apache.fluss.server.replica.delay.DelayedFetchLog;
 import org.apache.fluss.server.replica.delay.DelayedOperationManager;
 import org.apache.fluss.server.replica.delay.DelayedTableBucketKey;
@@ -349,8 +349,8 @@ public final class Replica {
         return bucketMetricGroup;
     }
 
-    public PhysicalTableMetricGroup tableMetrics() {
-        return bucketMetricGroup.getPhysicalTableMetricGroup();
+    public TableMetricGroup tableMetrics() {
+        return bucketMetricGroup.getTableMetricGroup();
     }
 
     public void makeLeader(NotifyLeaderAndIsrData data) throws IOException {
