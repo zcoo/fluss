@@ -277,6 +277,7 @@ public final class LogTablet {
             PhysicalTablePath tablePath,
             File tabletDir,
             Configuration conf,
+            TabletServerMetricGroup serverMetricGroup,
             long recoveryPoint,
             Scheduler scheduler,
             LogFormat logFormat,
@@ -313,6 +314,7 @@ public final class LogTablet {
                 new LocalLog(
                         tabletDir,
                         conf,
+                        serverMetricGroup,
                         segments,
                         recoveryPoint,
                         offsets.getNextOffsetMetadata(),
@@ -338,11 +340,6 @@ public final class LogTablet {
                 MetricNames.LOG_NUM_SEGMENTS, () -> localLog.getSegments().numberOfSegments());
         metricGroup.gauge(MetricNames.LOG_END_OFFSET, localLog::getLocalLogEndOffset);
         metricGroup.gauge(MetricNames.LOG_SIZE, () -> localLog.getSegments().sizeInBytes());
-
-        // about flush
-        metricGroup.meter(MetricNames.LOG_FLUSH_RATE, new MeterView(localLog.getFlushCount()));
-        metricGroup.histogram(
-                MetricNames.LOG_FLUSH_LATENCY_MS, localLog.getFlushLatencyHistogram());
     }
 
     public void updateLeaderEndOffsetSnapshot() {

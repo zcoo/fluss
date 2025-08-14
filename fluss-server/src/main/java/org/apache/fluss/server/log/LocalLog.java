@@ -90,6 +90,7 @@ public final class LocalLog {
     public LocalLog(
             File logTabletDir,
             Configuration config,
+            TabletServerMetricGroup serverMetricGroup,
             LogSegments segments,
             long recoveryPoint,
             LogOffsetMetadata nextOffsetMetadata,
@@ -105,9 +106,8 @@ public final class LocalLog {
         this.logFormat = logFormat;
 
         lastFlushedTime = new AtomicLong(System.currentTimeMillis());
-        flushCount = new SimpleCounter();
-        // consider won't flush frequently, we set a small window size
-        flushLatencyHistogram = new DescriptiveStatisticsHistogram(5);
+        flushCount = serverMetricGroup.logFlushCount();
+        flushLatencyHistogram = serverMetricGroup.logFlushLatencyHistogram();
         localLogStartOffset = segments.isEmpty() ? 0L : segments.firstSegmentBaseOffset().get();
         localMaxTimestamp =
                 segments.isEmpty() ? 0L : segments.lastSegment().get().maxTimestampSoFar();

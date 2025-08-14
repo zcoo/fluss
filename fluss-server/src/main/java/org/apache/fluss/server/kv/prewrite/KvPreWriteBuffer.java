@@ -104,14 +104,14 @@ public class KvPreWriteBuffer implements AutoCloseable {
     // the max LSN in the buffer
     private long maxLogSequenceNumber = -1;
 
-    public KvPreWriteBuffer(KvBatchWriter kvBatchWriter) {
+    public KvPreWriteBuffer(
+            KvBatchWriter kvBatchWriter, TabletServerMetricGroup serverMetricGroup) {
         this.kvBatchWriter = kvBatchWriter;
 
-        flushCount = new SimpleCounter();
-        // consider won't flush frequently, we set a small window size
-        flushLatencyHistogram = new DescriptiveStatisticsHistogram(5);
-        truncateAsDuplicatedCount = new SimpleCounter();
-        truncateAsErrorCount = new SimpleCounter();
+        flushCount = serverMetricGroup.kvFlushCount();
+        flushLatencyHistogram = serverMetricGroup.kvFlushLatencyHistogram();
+        truncateAsDuplicatedCount = serverMetricGroup.kvTruncateAsDuplicatedCount();
+        truncateAsErrorCount = serverMetricGroup.kvTruncateAsErrorCount();
     }
 
     /**
