@@ -408,6 +408,7 @@ final class LocalLogTest extends LogTestBase {
         return new LocalLog(
                 dir,
                 logConf,
+                TestingMetricGroups.TABLET_SERVER_METRICS,
                 segments,
                 recoverPoint,
                 nextOffsetMetadata,
