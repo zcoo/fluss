@@ -460,7 +460,7 @@ public class ReplicaStateMachine {
             toUpdateLeaderAndIsrList.forEach(coordinatorContext::putBucketLeaderAndIsr);
             return adjustedLeaderAndIsr;
         } catch (Exception e) {
-            LOG.error("Fail to batch update bucket LeaderAndIsr.");
+            LOG.error("Fail to batch update bucket LeaderAndIsr.", e);
         }
         return adjustedLeaderAndIsr;
     }
