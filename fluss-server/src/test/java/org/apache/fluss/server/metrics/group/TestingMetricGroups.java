@@ -17,7 +17,6 @@
 
 package org.apache.fluss.server.metrics.group;
 
-import org.apache.fluss.metadata.PhysicalTablePath;
 import org.apache.fluss.metadata.TablePath;
 import org.apache.fluss.metrics.registry.NOPMetricRegistry;
 

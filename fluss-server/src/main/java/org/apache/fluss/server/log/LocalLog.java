@@ -25,11 +25,10 @@ import org.apache.fluss.exception.LogStorageException;
 import org.apache.fluss.metadata.LogFormat;
 import org.apache.fluss.metadata.TableBucket;
 import org.apache.fluss.metrics.Counter;
-import org.apache.fluss.metrics.DescriptiveStatisticsHistogram;
 import org.apache.fluss.metrics.Histogram;
-import org.apache.fluss.metrics.SimpleCounter;
 import org.apache.fluss.record.FileLogProjection;
 import org.apache.fluss.record.MemoryLogRecords;
+import org.apache.fluss.server.metrics.group.TabletServerMetricGroup;
 import org.apache.fluss.utils.FileUtils;
 import org.apache.fluss.utils.FlussPaths;
 
