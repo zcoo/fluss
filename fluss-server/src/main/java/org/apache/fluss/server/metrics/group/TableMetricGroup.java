@@ -36,8 +36,8 @@ import java.util.Map;
 import static org.apache.fluss.metrics.utils.MetricGroupUtils.makeScope;
 
 /**
- * Metrics for the tables(tables or partitions) in server with {@link
- * TabletServerMetricGroup} as parent group.
+ * Metrics for the tables(tables or partitions) in server with {@link TabletServerMetricGroup} as
+ * parent group.
  */
 public class TableMetricGroup extends AbstractMetricGroup {
 

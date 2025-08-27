@@ -24,6 +24,7 @@ import org.apache.fluss.metadata.TableBucket;
 import org.apache.fluss.record.LogTestBase;
 import org.apache.fluss.record.MemoryLogRecords;
 import org.apache.fluss.server.log.LocalLog.SegmentDeletionReason;
+import org.apache.fluss.server.metrics.group.TestingMetricGroups;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

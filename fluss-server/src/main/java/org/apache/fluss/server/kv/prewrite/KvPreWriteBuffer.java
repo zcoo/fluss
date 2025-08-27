@@ -20,10 +20,9 @@ package org.apache.fluss.server.kv.prewrite;
 import org.apache.fluss.annotation.VisibleForTesting;
 import org.apache.fluss.memory.MemorySegment;
 import org.apache.fluss.metrics.Counter;
-import org.apache.fluss.metrics.DescriptiveStatisticsHistogram;
 import org.apache.fluss.metrics.Histogram;
-import org.apache.fluss.metrics.SimpleCounter;
 import org.apache.fluss.server.kv.KvBatchWriter;
+import org.apache.fluss.server.metrics.group.TabletServerMetricGroup;
 import org.apache.fluss.utils.MurmurHashUtils;
 
 import javax.annotation.Nullable;
