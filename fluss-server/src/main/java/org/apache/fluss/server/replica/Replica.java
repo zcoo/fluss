@@ -245,11 +245,11 @@ public final class Replica {
 
     private void registerMetrics() {
         // get root metric in the reference: bucket -> table -> tabletServer
-        TabletServerMetricGroup tabletServerMetricGroup =
-                bucketMetricGroup.getTableMetricGroup().getTabletServerMetricGroup();
-        isrExpands = tabletServerMetricGroup.isrExpands();
-        isrShrinks = tabletServerMetricGroup.isrShrinks();
-        failedIsrUpdates = tabletServerMetricGroup.failedIsrUpdates();
+        TabletServerMetricGroup serverMetrics =
+                bucketMetricGroup.getTableMetricGroup().getServerMetricGroup();
+        isrExpands = serverMetrics.isrExpands();
+        isrShrinks = serverMetrics.isrShrinks();
+        failedIsrUpdates = serverMetrics.failedIsrUpdates();
     }
 
     public boolean isKvTable() {
@@ -627,8 +627,6 @@ public final class Replica {
                                 tableConfig,
                                 arrowCompressionInfo);
             }
-
-            kvTablet.registerMetrics(bucketMetricGroup);
 
             logTablet.updateMinRetainOffset(restoreStartOffset);
             recoverKvTablet(restoreStartOffset);

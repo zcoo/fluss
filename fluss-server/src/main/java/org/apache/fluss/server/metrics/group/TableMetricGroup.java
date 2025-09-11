@@ -45,10 +45,13 @@ public class TableMetricGroup extends AbstractMetricGroup {
 
     private final TablePath tablePath;
 
-    // ---- metrics for log, when the table is for kv, it's for cdc log
+    // server-level metrics
+    private final TabletServerMetricGroup serverMetrics;
+
+    // table-level metrics for log, when the table is for kv, it's for cdc log
     private final LogMetricGroup logMetrics;
 
-    // ---- metrics for kv, will be null if the table isn't a kv table ----
+    // table-level  metrics for kv, will be null if the table isn't a kv table
     private final @Nullable KvMetricGroup kvMetrics;
 
     public TableMetricGroup(
@@ -60,6 +63,7 @@ public class TableMetricGroup extends AbstractMetricGroup {
                 registry,
                 makeScope(serverMetricGroup, tablePath.getDatabaseName(), tablePath.getTableName()),
                 serverMetricGroup);
+        this.serverMetrics = serverMetricGroup;
         this.tablePath = tablePath;
 
         // if is kv table, create kv metrics
@@ -87,17 +91,17 @@ public class TableMetricGroup extends AbstractMetricGroup {
 
     public void incLogMessageIn(long n) {
         logMetrics.messagesIn.inc(n);
-        ((TabletServerMetricGroup) parent).messageIn().inc(n);
+        serverMetrics.messageIn().inc(n);
     }
 
     public void incLogBytesIn(long n) {
         logMetrics.bytesIn.inc(n);
-        ((TabletServerMetricGroup) parent).bytesIn().inc(n);
+        serverMetrics.bytesIn().inc(n);
     }
 
     public void incLogBytesOut(long n) {
         logMetrics.bytesOut.inc(n);
-        ((TabletServerMetricGroup) parent).bytesOut().inc(n);
+        serverMetrics.bytesOut().inc(n);
     }
 
     public Counter totalFetchLogRequests() {
@@ -141,7 +145,7 @@ public class TableMetricGroup extends AbstractMetricGroup {
             NoOpCounter.INSTANCE.inc(n);
         } else {
             kvMetrics.messagesIn.inc(n);
-            ((TabletServerMetricGroup) parent).messageIn().inc(n);
+            serverMetrics.messageIn().inc(n);
         }
     }
 
@@ -150,7 +154,7 @@ public class TableMetricGroup extends AbstractMetricGroup {
             NoOpCounter.INSTANCE.inc(n);
         } else {
             kvMetrics.bytesIn.inc(n);
-            ((TabletServerMetricGroup) parent).bytesIn().inc(n);
+            serverMetrics.bytesIn().inc(n);
         }
     }
 
@@ -239,7 +243,7 @@ public class TableMetricGroup extends AbstractMetricGroup {
         return buckets.size();
     }
 
-    public TabletServerMetricGroup getTabletServerMetricGroup() {
+    public TabletServerMetricGroup getServerMetricGroup() {
         return (TabletServerMetricGroup) parent;
     }
 

@@ -454,23 +454,23 @@ Some metrics might not be exposed when using other JVM implementations (e.g. IBM
       <td>Meter</td>
     </tr>
      <tr>
-      <td>flushPerSecond</td>
+      <td>logFlushPerSecond</td>
       <td>The log flush count per second.</td>
       <td>Meter</td>
     </tr>
      <tr>
-      <td>flushLatencyMs</td>
+      <td>logFlushLatencyMs</td>
       <td>The log flush latency in ms.</td>
       <td>Histogram</td>
     </tr>
     <tr>
-      <td>preWriteBufferFlushPerSecond</td>
-      <td>The kv pre-write buffer flush count per second.</td>
+      <td>kvFlushPerSecond</td>
+      <td>The kv pre-write buffer flush to underlying RocksDB count per second.</td>
       <td>Meter</td>
     </tr>
      <tr>
-      <td>preWriteBufferFlushLatencyMs</td>
-      <td>The kv pre-write buffer latency in ms.</td>
+      <td>kvFlushLatencyMs</td>
+      <td>The kv pre-write buffer flush to underlying RocksDB latency in ms.</td>
       <td>Histogram</td>
     </tr>
      <tr>

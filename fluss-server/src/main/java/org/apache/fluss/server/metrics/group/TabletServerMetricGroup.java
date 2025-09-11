@@ -116,9 +116,9 @@ public class TabletServerMetricGroup extends AbstractMetricGroup {
 
         // about pre-write buffer.
         kvFlushCount = new SimpleCounter();
-        meter(MetricNames.KV_PRE_WRITE_BUFFER_FLUSH_RATE, new MeterView(kvFlushCount));
+        meter(MetricNames.KV_FLUSH_RATE, new MeterView(kvFlushCount));
         kvFlushLatencyHistogram = new DescriptiveStatisticsHistogram(WINDOW_SIZE);
-        histogram(MetricNames.KV_PRE_WRITE_BUFFER_FLUSH_LATENCY_MS, kvFlushLatencyHistogram);
+        histogram(MetricNames.KV_FLUSH_LATENCY_MS, kvFlushLatencyHistogram);
         kvTruncateAsDuplicatedCount = new SimpleCounter();
         meter(
                 MetricNames.KV_PRE_WRITE_BUFFER_TRUNCATE_AS_DUPLICATED_RATE,

@@ -103,17 +103,17 @@ public class MetricNames {
     public static final String FAILED_ISR_UPDATES_RATE = "failedIsrUpdatesPerSecond";
 
     // for log tablet
-    public static final String LOG_FLUSH_RATE = "flushPerSecond";
-    public static final String LOG_FLUSH_LATENCY_MS = "flushLatencyMs";
+    public static final String LOG_FLUSH_RATE = "logFlushPerSecond";
+    public static final String LOG_FLUSH_LATENCY_MS = "logFlushLatencyMs";
 
     // for kv tablet
+    public static final String KV_FLUSH_RATE = "kvFlushPerSecond";
+    public static final String KV_FLUSH_LATENCY_MS = "kvFlushLatencyMs";
     public static final String KV_PRE_WRITE_BUFFER_TRUNCATE_AS_DUPLICATED_RATE =
             "preWriteBufferTruncateAsDuplicatedPerSecond";
     public static final String KV_PRE_WRITE_BUFFER_TRUNCATE_AS_ERROR_RATE =
             "preWriteBufferTruncateAsErrorPerSecond";
-    public static final String KV_PRE_WRITE_BUFFER_FLUSH_RATE = "preWriteBufferFlushPerSecond";
-    public static final String KV_PRE_WRITE_BUFFER_FLUSH_LATENCY_MS =
-            "preWriteBufferFlushLatencyMs";
+
     // --------------------------------------------------------------------------------------------
     // metrics for table bucket
     // --------------------------------------------------------------------------------------------
