@@ -323,7 +323,7 @@ public class CoordinatorEventProcessor implements EventProcessor {
                         .map(Map.Entry::getKey)
                         .collect(Collectors.toList());
         Map<TablePath, Map<String, Long>> tablePathMap =
-                zooKeeperClient.getPartitionNameAndIds4tables(partitionedTablePathList);
+                zooKeeperClient.getPartitionNameAndIdsForTables(partitionedTablePathList);
         for (TablePath tablePath : tablePathSet) {
             TableInfo tableInfo = tablePath2TableInfoMap.get(tablePath);
             coordinatorContext.putTablePath(tableInfo.getTableId(), tablePath);

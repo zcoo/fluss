@@ -538,7 +538,7 @@ class ZooKeeperClientTest {
         assertThat(partition.getPartitionId()).isEqualTo(1L);
         partition = zookeeperClient.getPartition(tablePath, "p2").get();
         assertThat(partition.getPartitionId()).isEqualTo(2L);
-        assertThat(zookeeperClient.getPartitions4tables(Arrays.asList(tablePath)))
+        assertThat(zookeeperClient.getPartitionsForTables(Arrays.asList(tablePath)))
                 .containsValues(new ArrayList<>(partitions));
 
         // test delete partition

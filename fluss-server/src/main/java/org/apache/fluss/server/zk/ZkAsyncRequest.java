@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,32 +17,32 @@
 
 package org.apache.fluss.server.zk;
 
-/** ZooKeeper response for async fetch path data. */
-public class ZookeeperGetDataResponse {
-    private String path;
-    private boolean success;
-    private byte[] data;
+/** The base class for ZooKeeper async operation request. */
+public abstract class ZkAsyncRequest {
 
-    public ZookeeperGetDataResponse(String path, boolean success) {
-        this.path = path;
-        this.success = success;
-    }
+    private final String path;
 
-    public ZookeeperGetDataResponse(String path, boolean success, byte[] data) {
+    protected ZkAsyncRequest(String path) {
         this.path = path;
-        this.success = success;
-        this.data = data;
     }
 
     public String getPath() {
         return path;
     }
 
-    public boolean isSuccess() {
-        return success;
+    // -------------------------------------------------------------------------------------------
+
+    /** The request for ZooKeeper getData async operation. */
+    public static class ZkGetDataRequest extends ZkAsyncRequest {
+        protected ZkGetDataRequest(String path) {
+            super(path);
+        }
     }
 
-    public byte[] getData() {
-        return data;
+    /** The request for ZooKeeper getChildren async operation. */
+    public static class ZkGetChildrenRequest extends ZkAsyncRequest {
+        protected ZkGetChildrenRequest(String path) {
+            super(path);
+        }
     }
 }
