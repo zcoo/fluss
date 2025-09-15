@@ -333,7 +333,7 @@ public class ZooKeeperClient implements AutoCloseable {
         return bytes.map(PartitionIdZNode::decode);
     }
 
-    /** Get the tables assignments in ZK. */
+    /** Get the partitions assignments in ZK. */
     public Map<Long, PartitionAssignment> getPartitionsAssignments(List<Long> partitionIds)
             throws Exception {
         Map<String, Long> path2PartitionIdMap =
@@ -444,7 +444,7 @@ public class ZooKeeperClient implements AutoCloseable {
         return bytes.map(LeaderAndIsrZNode::decode);
     }
 
-    /** Get the tablet servers registered in ZK. */
+    /** Get the buckets LeaderAndIsr in ZK. */
     public Map<TableBucket, LeaderAndIsr> getLeaderAndIsrs(Collection<TableBucket> tableBuckets)
             throws Exception {
         Map<String, TableBucket> path2TableBucketMap =
@@ -686,7 +686,7 @@ public class ZooKeeperClient implements AutoCloseable {
         return partitions;
     }
 
-    /** Get the partition and the id for the partitions of a table in ZK. */
+    /** Get the partition and the id for the partitions of tables in ZK. */
     public Map<TablePath, Map<String, Long>> getPartitionNameAndIdsForTables(
             List<TablePath> tablePaths) throws Exception {
         Map<TablePath, Map<String, Long>> result = new HashMap<>();
@@ -1146,7 +1146,7 @@ public class ZooKeeperClient implements AutoCloseable {
      * @param resource the resource whose ACL should be deleted
      * @throws Exception if there is an error accessing ZooKeeper
      */
-    public void contitionalDeleteResourceAcl(Resource resource, int zkVersion) throws Exception {
+    public void conditionalDeleteResourceAcl(Resource resource, int zkVersion) throws Exception {
         String path = ResourceAclNode.path(resource);
         zkClient.delete().withVersion(zkVersion).forPath(path);
     }
