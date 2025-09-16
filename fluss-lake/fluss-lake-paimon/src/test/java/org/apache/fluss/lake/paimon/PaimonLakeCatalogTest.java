@@ -93,6 +93,6 @@ class PaimonLakeCatalogTest {
 
         TablePath tablePath = TablePath.of(database, tableName);
 
-        flussPaimonCatalog.createTable(tablePath, td);
+        flussPaimonCatalog.createTable(tablePath, td, null);
     }
 }

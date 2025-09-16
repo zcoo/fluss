@@ -25,6 +25,7 @@ import org.apache.fluss.lake.writer.LakeTieringFactory;
 import org.apache.fluss.metadata.TableChange;
 import org.apache.fluss.metadata.TableDescriptor;
 import org.apache.fluss.metadata.TablePath;
+import org.apache.fluss.security.acl.FlussPrincipal;
 import org.apache.fluss.utils.TemporaryClassLoaderContext;
 import org.apache.fluss.utils.WrappingProxy;
 
@@ -75,10 +76,11 @@ public class PluginLakeStorageWrapper implements LakeStoragePlugin {
         }
 
         @Override
-        public void createTable(TablePath tablePath, TableDescriptor tableDescriptor)
+        public void createTable(
+                TablePath tablePath, TableDescriptor tableDescriptor, FlussPrincipal principal)
                 throws TableAlreadyExistException {
             try (TemporaryClassLoaderContext ignored = TemporaryClassLoaderContext.of(loader)) {
-                inner.createTable(tablePath, tableDescriptor);
+                inner.createTable(tablePath, tableDescriptor, principal);
             }
         }
 

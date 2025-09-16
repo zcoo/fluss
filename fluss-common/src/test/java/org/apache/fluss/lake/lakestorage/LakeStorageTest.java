@@ -26,6 +26,7 @@ import org.apache.fluss.metadata.TableChange;
 import org.apache.fluss.metadata.TableDescriptor;
 import org.apache.fluss.metadata.TablePath;
 import org.apache.fluss.plugin.PluginManager;
+import org.apache.fluss.security.acl.FlussPrincipal;
 
 import org.junit.jupiter.api.Test;
 
@@ -146,7 +147,8 @@ class LakeStorageTest {
     private static class TestPaimonLakeCatalog implements LakeCatalog {
 
         @Override
-        public void createTable(TablePath tablePath, TableDescriptor tableDescriptor)
+        public void createTable(
+                TablePath tablePath, TableDescriptor tableDescriptor, FlussPrincipal principal)
                 throws TableAlreadyExistException {}
 
         @Override

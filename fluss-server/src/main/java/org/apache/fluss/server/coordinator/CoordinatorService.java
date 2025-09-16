@@ -285,7 +285,7 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         if (isDataLakeEnabled(tableDescriptor)) {
             try {
                 checkNotNull(lakeCatalogContainer.getLakeCatalog())
-                        .createTable(tablePath, tableDescriptor);
+                        .createTable(tablePath, tableDescriptor, currentSession().getPrincipal());
             } catch (TableAlreadyExistException e) {
                 throw new LakeTableAlreadyExistException(
                         String.format(
@@ -324,7 +324,8 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
                 request.isIgnoreIfNotExists(),
                 lakeCatalogContainer.getLakeCatalog(),
                 lakeCatalogContainer.getDataLakeFormat(),
-                lakeTableTieringManager);
+                lakeTableTieringManager,
+                currentSession());
 
         return CompletableFuture.completedFuture(new AlterTableResponse());
     }

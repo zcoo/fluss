@@ -26,6 +26,7 @@ import org.apache.fluss.lake.lakestorage.LakeCatalog;
 import org.apache.fluss.metadata.TableChange;
 import org.apache.fluss.metadata.TableDescriptor;
 import org.apache.fluss.metadata.TablePath;
+import org.apache.fluss.security.acl.FlussPrincipal;
 import org.apache.fluss.utils.IOUtils;
 
 import org.apache.iceberg.PartitionSpec;
@@ -82,7 +83,8 @@ public class IcebergLakeCatalog implements LakeCatalog {
     }
 
     @Override
-    public void createTable(TablePath tablePath, TableDescriptor tableDescriptor)
+    public void createTable(
+            TablePath tablePath, TableDescriptor tableDescriptor, FlussPrincipal principal)
             throws TableAlreadyExistException {
         // convert Fluss table path to iceberg table
         boolean isPkTable = tableDescriptor.hasPrimaryKey();

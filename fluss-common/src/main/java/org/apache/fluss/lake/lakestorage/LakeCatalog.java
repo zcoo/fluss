@@ -23,6 +23,7 @@ import org.apache.fluss.exception.TableNotExistException;
 import org.apache.fluss.metadata.TableChange;
 import org.apache.fluss.metadata.TableDescriptor;
 import org.apache.fluss.metadata.TablePath;
+import org.apache.fluss.security.acl.FlussPrincipal;
 
 import java.util.List;
 
@@ -41,7 +42,7 @@ public interface LakeCatalog extends AutoCloseable {
      * @param tableDescriptor The descriptor of the table to be created
      * @throws TableAlreadyExistException if the table already exists
      */
-    void createTable(TablePath tablePath, TableDescriptor tableDescriptor)
+    void createTable(TablePath tablePath, TableDescriptor tableDescriptor, FlussPrincipal principal)
             throws TableAlreadyExistException;
 
     /**

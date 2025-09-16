@@ -45,6 +45,7 @@ import org.apache.fluss.metadata.TableDescriptor;
 import org.apache.fluss.metadata.TableInfo;
 import org.apache.fluss.metadata.TablePartition;
 import org.apache.fluss.metadata.TablePath;
+import org.apache.fluss.rpc.netty.server.Session;
 import org.apache.fluss.server.entity.TablePropertyChanges;
 import org.apache.fluss.server.zk.ZooKeeperClient;
 import org.apache.fluss.server.zk.data.DatabaseRegistration;
@@ -318,7 +319,8 @@ public class MetadataManager {
             boolean ignoreIfNotExists,
             @Nullable LakeCatalog lakeCatalog,
             @Nullable DataLakeFormat dataLakeFormat,
-            LakeTableTieringManager lakeTableTieringManager) {
+            LakeTableTieringManager lakeTableTieringManager,
+            Session session) {
         try {
             // it throws TableNotExistException if the table or database not exists
             TableRegistration tableReg = getTableRegistration(tablePath);
@@ -349,7 +351,8 @@ public class MetadataManager {
                         newDescriptor,
                         tableChanges,
                         lakeCatalog,
-                        dataLakeFormat);
+                        dataLakeFormat,
+                        session);
                 // update the table to zk
                 TableRegistration updatedTableRegistration =
                         tableReg.newProperties(
@@ -388,7 +391,8 @@ public class MetadataManager {
             TableDescriptor newDescriptor,
             List<TableChange> tableChanges,
             LakeCatalog lakeCatalog,
-            DataLakeFormat dataLakeFormat) {
+            DataLakeFormat dataLakeFormat,
+            Session session) {
         if (isDataLakeEnabled(newDescriptor)) {
             if (lakeCatalog == null) {
                 throw new InvalidAlterTableException(
@@ -402,7 +406,7 @@ public class MetadataManager {
             if (!isDataLakeEnabled(tableDescriptor)) {
                 // before create table in fluss, we may create in lake
                 try {
-                    lakeCatalog.createTable(tablePath, newDescriptor);
+                    lakeCatalog.createTable(tablePath, newDescriptor, session.getPrincipal());
                     // no need to alter lake table if it is newly created
                     isLakeTableNewlyCreated = true;
                 } catch (TableAlreadyExistException e) {

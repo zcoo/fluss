@@ -29,6 +29,7 @@ import org.apache.fluss.metadata.DataLakeFormat;
 import org.apache.fluss.metadata.TableChange;
 import org.apache.fluss.metadata.TableDescriptor;
 import org.apache.fluss.metadata.TablePath;
+import org.apache.fluss.security.acl.FlussPrincipal;
 
 import java.util.HashMap;
 import java.util.List;
@@ -74,7 +75,8 @@ public class TestingPaimonStoragePlugin implements LakeStoragePlugin {
         private final Map<TablePath, TableDescriptor> tableByPath = new HashMap<>();
 
         @Override
-        public void createTable(TablePath tablePath, TableDescriptor tableDescriptor)
+        public void createTable(
+                TablePath tablePath, TableDescriptor tableDescriptor, FlussPrincipal principal)
                 throws TableAlreadyExistException {
             if (tableByPath.containsKey(tablePath)) {
                 throw new TableAlreadyExistException("Table " + tablePath + " already exists");
