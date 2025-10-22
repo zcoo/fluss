@@ -21,6 +21,7 @@ import org.apache.fluss.annotation.Internal;
 import org.apache.fluss.annotation.VisibleForTesting;
 import org.apache.fluss.config.ConfigOptions;
 import org.apache.fluss.config.Configuration;
+import org.apache.fluss.exception.InvalidCoordinatorException;
 import org.apache.fluss.metadata.PhysicalTablePath;
 import org.apache.fluss.metadata.ResolvedPartitionSpec;
 import org.apache.fluss.metadata.Schema;
@@ -186,13 +187,9 @@ public class ZooKeeperClient implements AutoCloseable {
             ensureEpochZnodeExists();
 
             try {
-                Stat currentStat = new Stat();
-                byte[] bytes =
-                        zkClient.getData()
-                                .storingStatIn(currentStat)
-                                .forPath(ZkData.CoordinatorEpochZNode.path());
-                int currentEpoch = ZkData.CoordinatorEpochZNode.decode(bytes);
-                int currentVersion = currentStat.getVersion();
+                Tuple2<Integer, Integer> getEpoch = getCurrentEpoch();
+                int currentEpoch = getEpoch.f0;
+                int currentVersion = getEpoch.f1;
                 int newEpoch = currentEpoch + 1;
                 LOG.info(
                         "Coordinator leader {} tries to update epoch. Current epoch={}, Zookeeper version={}, new epoch={}",
@@ -234,7 +231,7 @@ public class ZooKeeperClient implements AutoCloseable {
         Optional<byte[]> bytes = getOrEmpty(ZkData.CoordinatorLeaderZNode.path());
         return bytes.map(
                 data ->
-                        // maybe a empty node when a leader is elected but not registered
+                        // maybe an empty node when a leader is elected but not registered
                         data.length == 0 ? null : ZkData.CoordinatorLeaderZNode.decode(data));
     }
 
@@ -255,10 +252,22 @@ public class ZooKeeperClient implements AutoCloseable {
                         .forPath(
                                 path,
                                 ZkData.CoordinatorEpochZNode.encode(
-                                        CoordinatorContext.INITIAL_COORDINATOR_EPOCH));
+                                        CoordinatorContext.INITIAL_COORDINATOR_EPOCH - 1));
             } catch (KeeperException.NodeExistsException e) {
             }
         }
+    }
+
+    /** Get epoch now in ZK. */
+    public Tuple2<Integer, Integer> getCurrentEpoch() throws Exception {
+        Stat currentStat = new Stat();
+        byte[] bytes =
+                zkClient.getData()
+                        .storingStatIn(currentStat)
+                        .forPath(ZkData.CoordinatorEpochZNode.path());
+        int currentEpoch = ZkData.CoordinatorEpochZNode.decode(bytes);
+        int currentVersion = currentStat.getVersion();
+        return new Tuple2<>(currentEpoch, currentVersion);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -487,14 +496,25 @@ public class ZooKeeperClient implements AutoCloseable {
                 "leader and isr");
     }
 
-    public void updateLeaderAndIsr(TableBucket tableBucket, LeaderAndIsr leaderAndIsr)
+    public void updateLeaderAndIsr(
+            TableBucket tableBucket, LeaderAndIsr leaderAndIsr, int currentCoordinatorEpoch)
             throws Exception {
+        // check coordinator epoch to ensure no other Coordinator leader exists.
+        if (leaderAndIsr.coordinatorEpoch() != currentCoordinatorEpoch) {
+            throw new InvalidCoordinatorException(
+                    String.format(
+                            "LeaderAndIsr coordinator epoch %d does not match current coordinator epoch %d for bucket %s. "
+                                    + "This coordinator may no longer be the leader.",
+                            leaderAndIsr.coordinatorEpoch(), currentCoordinatorEpoch, tableBucket));
+        }
+
         String path = LeaderAndIsrZNode.path(tableBucket);
         zkClient.setData().forPath(path, LeaderAndIsrZNode.encode(leaderAndIsr));
         LOG.info("Updated {} for bucket {} in Zookeeper.", leaderAndIsr, tableBucket);
     }
 
-    public void batchUpdateLeaderAndIsr(Map<TableBucket, LeaderAndIsr> leaderAndIsrList)
+    public void batchUpdateLeaderAndIsr(
+            Map<TableBucket, LeaderAndIsr> leaderAndIsrList, int currentCoordinatorEpoch)
             throws Exception {
         if (leaderAndIsrList.isEmpty()) {
             return;
@@ -504,6 +524,17 @@ public class ZooKeeperClient implements AutoCloseable {
         for (Map.Entry<TableBucket, LeaderAndIsr> entry : leaderAndIsrList.entrySet()) {
             TableBucket tableBucket = entry.getKey();
             LeaderAndIsr leaderAndIsr = entry.getValue();
+
+            // check coordinator epoch to ensure no other Coordinator leader exists.
+            if (leaderAndIsr.coordinatorEpoch() != currentCoordinatorEpoch) {
+                throw new InvalidCoordinatorException(
+                        String.format(
+                                "LeaderAndIsr coordinator epoch %d does not match current coordinator epoch %d for bucket %s. "
+                                        + "This coordinator may no longer be the leader.",
+                                leaderAndIsr.coordinatorEpoch(),
+                                currentCoordinatorEpoch,
+                                tableBucket));
+            }
 
             LOG.info("Batch Update {} for bucket {} in Zookeeper.", leaderAndIsr, tableBucket);
             String path = LeaderAndIsrZNode.path(tableBucket);

@@ -927,9 +927,7 @@ public final class FlussClusterExtension
 
     public void waitUtilCoordinatorServerElected() {
         waitUntil(
-                () -> {
-                    return zooKeeperClient.getCoordinatorLeaderAddress().isPresent();
-                },
+                () -> zooKeeperClient.getCoordinatorLeaderAddress().isPresent(),
                 Duration.ofSeconds(10),
                 "Fail to wait coordinator server elected");
     }
