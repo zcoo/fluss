@@ -1178,7 +1178,7 @@ public class CoordinatorEventProcessor implements EventProcessor {
 
         try {
             zooKeeperClient.batchUpdateLeaderAndIsr(
-                    newLeaderAndIsrList, coordinatorContext.getCoordinatorEpoch());
+                    newLeaderAndIsrList, coordinatorContext.getCoordinatorEpochZkVersion());
             newLeaderAndIsrList.forEach(
                     (tableBucket, newLeaderAndIsr) ->
                             result.add(new AdjustIsrResultForBucket(tableBucket, newLeaderAndIsr)));
@@ -1190,7 +1190,9 @@ public class CoordinatorEventProcessor implements EventProcessor {
                 LeaderAndIsr newLeaderAndIsr = entry.getValue();
                 try {
                     zooKeeperClient.updateLeaderAndIsr(
-                            tableBucket, newLeaderAndIsr, coordinatorContext.getCoordinatorEpoch());
+                            tableBucket,
+                            newLeaderAndIsr,
+                            coordinatorContext.getCoordinatorEpochZkVersion());
                 } catch (Exception e) {
                     LOG.error("Error when register leader and isr.", e);
                     result.add(
