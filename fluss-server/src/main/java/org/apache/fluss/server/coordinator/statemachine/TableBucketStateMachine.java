@@ -385,7 +385,8 @@ public class TableBucketStateMachine {
         if (!tableBucketLeadAndIsrInfos.isEmpty()) {
             try {
                 zooKeeperClient.batchRegisterLeaderAndIsrForTablePartition(
-                        tableBucketLeadAndIsrInfos);
+                        tableBucketLeadAndIsrInfos,
+                        coordinatorContext.getCoordinatorEpochZkVersion());
                 registerSuccessList.addAll(tableBucketLeadAndIsrInfos);
             } catch (Exception e) {
                 LOG.error(
