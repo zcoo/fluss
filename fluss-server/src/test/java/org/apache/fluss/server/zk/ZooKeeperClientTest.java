@@ -162,8 +162,10 @@ class ZooKeeperClientTest {
                         .add(0, BucketAssignment.of(1, 2))
                         .add(1, BucketAssignment.of(3, 4, 5))
                         .build();
-        zookeeperClient.registerTableAssignment(tableId1, tableAssignment1);
-        zookeeperClient.registerTableAssignment(tableId2, tableAssignment2);
+        zookeeperClient.registerTableAssignment(
+                tableId1, tableAssignment1, ZkVersion.MATCH_ANY_VERSION.getVersion());
+        zookeeperClient.registerTableAssignment(
+                tableId2, tableAssignment2, ZkVersion.MATCH_ANY_VERSION.getVersion());
         assertThat(zookeeperClient.getTableAssignment(tableId1)).contains(tableAssignment1);
         assertThat(zookeeperClient.getTableAssignment(tableId2)).contains(tableAssignment2);
         assertThat(zookeeperClient.getTablesAssignments(Arrays.asList(tableId1, tableId2)))
@@ -172,11 +174,12 @@ class ZooKeeperClientTest {
         // test update
         TableAssignment tableAssignment3 =
                 TableAssignment.builder().add(3, BucketAssignment.of(1, 5)).build();
-        zookeeperClient.updateTableAssignment(tableId1, tableAssignment3);
+        zookeeperClient.updateTableAssignment(
+                tableId1, tableAssignment3, ZkVersion.MATCH_ANY_VERSION.getVersion());
         assertThat(zookeeperClient.getTableAssignment(tableId1)).contains(tableAssignment3);
 
         // test delete
-        zookeeperClient.deleteTableAssignment(tableId1);
+        zookeeperClient.deleteTableAssignment(tableId1, ZkVersion.MATCH_ANY_VERSION.getVersion());
         assertThat(zookeeperClient.getTableAssignment(tableId1)).isEmpty();
     }
 
@@ -208,7 +211,7 @@ class ZooKeeperClientTest {
         assertThat(zookeeperClient.getLeaderAndIsr(tableBucket1)).hasValue(leaderAndIsr1);
 
         // test delete
-        zookeeperClient.deleteLeaderAndIsr(tableBucket1);
+        zookeeperClient.deleteLeaderAndIsr(tableBucket1, ZkVersion.MATCH_ANY_VERSION.getVersion());
         assertThat(zookeeperClient.getLeaderAndIsr(tableBucket1)).isEmpty();
     }
 
@@ -232,7 +235,8 @@ class ZooKeeperClientTest {
             tableBucketInfo.add(info);
         }
         // batch create
-        zookeeperClient.batchRegisterLeaderAndIsrForTablePartition(tableBucketInfo);
+        zookeeperClient.batchRegisterLeaderAndIsrForTablePartition(
+                tableBucketInfo, ZkVersion.MATCH_ANY_VERSION.getVersion());
 
         for (int i = 0; i < 100; i++) {
             // each should register successful
@@ -309,7 +313,8 @@ class ZooKeeperClientTest {
             TableBucket tableBucket = entry.getKey();
             LeaderAndIsr leaderAndIsr = entry.getValue();
             assertThat(zookeeperClient.getLeaderAndIsr(tableBucket)).hasValue(leaderAndIsr);
-            zookeeperClient.deleteLeaderAndIsr(tableBucket);
+            zookeeperClient.deleteLeaderAndIsr(
+                    tableBucket, ZkVersion.MATCH_ANY_VERSION.getVersion());
             assertThat(zookeeperClient.getLeaderAndIsr(tableBucket)).isEmpty();
         }
     }
@@ -456,7 +461,8 @@ class ZooKeeperClientTest {
                 table1Bucket2.getTableId(),
                 TableAssignment.builder()
                         .add(table1Bucket2.getBucket(), BucketAssignment.of(0, 1, 2))
-                        .build());
+                        .build(),
+                ZkVersion.MATCH_ANY_VERSION.getVersion());
         BucketSnapshot snapshot1 = new BucketSnapshot(1L, 10L, "oss://test/cp1");
         BucketSnapshot snapshot2 = new BucketSnapshot(2L, 20L, "oss://test/cp2");
         zookeeperClient.registerTableBucketSnapshot(table1Bucket2, snapshot1);
