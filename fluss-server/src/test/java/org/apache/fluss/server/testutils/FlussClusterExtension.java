@@ -275,6 +275,7 @@ public final class FlussClusterExtension
         } else {
             // start the existing coordinator server
             coordinatorServer.start();
+            waitUntilCoordinatorServerElected();
             coordinatorServerInfo =
                     new ServerInfo(
                             0,
