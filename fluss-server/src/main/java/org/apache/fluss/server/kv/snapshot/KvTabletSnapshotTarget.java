@@ -23,6 +23,7 @@ import org.apache.fluss.fs.FileSystem;
 import org.apache.fluss.fs.FsPath;
 import org.apache.fluss.metadata.TableBucket;
 import org.apache.fluss.server.SequenceIDCounter;
+import org.apache.fluss.server.zk.ZooKeeperClient;
 import org.apache.fluss.utils.CloseableRegistry;
 import org.apache.fluss.utils.ExceptionUtils;
 import org.apache.fluss.utils.FlussPaths;
@@ -30,6 +31,7 @@ import org.apache.fluss.utils.FlussPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
@@ -54,6 +56,8 @@ public class KvTabletSnapshotTarget implements PeriodicSnapshotManager.SnapshotT
     private final TableBucket tableBucket;
 
     private final CompletedKvSnapshotCommitter completedKvSnapshotCommitter;
+
+    private final ZooKeeperClient zooKeeperClient;
 
     private final RocksIncrementalSnapshot rocksIncrementalSnapshot;
     private final FsPath remoteKvTabletDir;
@@ -82,6 +86,7 @@ public class KvTabletSnapshotTarget implements PeriodicSnapshotManager.SnapshotT
     KvTabletSnapshotTarget(
             TableBucket tableBucket,
             CompletedKvSnapshotCommitter completedKvSnapshotCommitter,
+            ZooKeeperClient zooKeeperClient,
             RocksIncrementalSnapshot rocksIncrementalSnapshot,
             FsPath remoteKvTabletDir,
             Executor ioExecutor,
@@ -97,6 +102,7 @@ public class KvTabletSnapshotTarget implements PeriodicSnapshotManager.SnapshotT
         this(
                 tableBucket,
                 completedKvSnapshotCommitter,
+                zooKeeperClient,
                 rocksIncrementalSnapshot,
                 remoteKvTabletDir,
                 (int) ConfigOptions.REMOTE_FS_WRITE_BUFFER_SIZE.defaultValue().getBytes(),
@@ -114,6 +120,7 @@ public class KvTabletSnapshotTarget implements PeriodicSnapshotManager.SnapshotT
     public KvTabletSnapshotTarget(
             TableBucket tableBucket,
             CompletedKvSnapshotCommitter completedKvSnapshotCommitter,
+            @Nonnull ZooKeeperClient zooKeeperClient,
             RocksIncrementalSnapshot rocksIncrementalSnapshot,
             FsPath remoteKvTabletDir,
             int snapshotWriteBufferSize,
@@ -129,6 +136,7 @@ public class KvTabletSnapshotTarget implements PeriodicSnapshotManager.SnapshotT
             throws IOException {
         this.tableBucket = tableBucket;
         this.completedKvSnapshotCommitter = completedKvSnapshotCommitter;
+        this.zooKeeperClient = zooKeeperClient;
         this.rocksIncrementalSnapshot = rocksIncrementalSnapshot;
         this.remoteKvTabletDir = remoteKvTabletDir;
         this.remoteSnapshotSharedDir = FlussPaths.remoteKvSharedDir(remoteKvTabletDir);
