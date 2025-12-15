@@ -100,7 +100,6 @@ public class CoordinatorLeaderElection implements AutoCloseable {
             // Later we can make it as a hot backup server to continuously synchronize metadata from
             // Zookeeper, which save time from initializing context
             //            leaderLatch.await();
-            //            initLeaderServices.run();
 
         } catch (Exception e) {
             LOG.error("Failed to start LeaderLatch for server {}", serverId, e);
