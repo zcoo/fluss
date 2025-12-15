@@ -90,6 +90,7 @@ import org.apache.fluss.shaded.zookeeper3.org.apache.zookeeper.data.Stat;
 import org.apache.fluss.utils.ExceptionUtils;
 import org.apache.fluss.utils.types.Tuple2;
 
+import org.checkerframework.checker.units.qual.K;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -192,7 +193,6 @@ public class ZooKeeperClient implements AutoCloseable {
      * epoch and coordinator epoch zk version.
      */
     public Optional<Integer> fenceBecomeCoordinatorLeader(int coordinatorId) throws Exception {
-        try {
             ensureEpochZnodeExists();
 
             try {
@@ -220,8 +220,7 @@ public class ZooKeeperClient implements AutoCloseable {
                 // If this happens, it means our fence is in effect.
                 LOG.info("Coordinator leader {} failed to update epoch.", coordinatorId);
             }
-        } catch (KeeperException.NodeExistsException e) {
-        }
+
         return Optional.empty();
     }
 
@@ -263,6 +262,8 @@ public class ZooKeeperClient implements AutoCloseable {
                                 ZkData.CoordinatorEpochZNode.encode(
                                         CoordinatorContext.INITIAL_COORDINATOR_EPOCH - 1));
             } catch (KeeperException.NodeExistsException e) {
+                // This should not happen.
+                throw new RuntimeException("Coordinator leader try to init epoch znode failed. Epoch znode should not exist.");
             }
         }
     }
@@ -1731,8 +1732,11 @@ public class ZooKeeperClient implements AutoCloseable {
                 // After creating parent (or if parent is root), retry creating the original path
                 zkClient.transaction().forOperations(ops);
             }
+        } catch (KeeperException.BadVersionException e) {
+            LOG.error("Bad version for path {}, expected version {} ", path, expectedZkVersion);
+            throw e;
         }
-    }
+     }
 
     /**
      * Delete a node (and recursively delete children) with Zk epoch version check.
