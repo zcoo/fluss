@@ -73,6 +73,9 @@ public abstract class AbstractMetricGroup implements MetricGroup {
     /** The registry that this metrics group belongs to. */
     protected final MetricRegistry registry;
 
+    /** The last record time for the group. */
+    protected volatile long lastRecordTime;
+
     /** All metrics that are directly contained in this group. */
     private final Map<String, Metric> metrics = new HashMap<>();
 
@@ -194,6 +197,10 @@ public abstract class AbstractMetricGroup implements MetricGroup {
      * @return logical name for this group
      */
     protected abstract String getGroupName(CharacterFilter filter);
+
+    public long getLastRecordTime() {
+        return lastRecordTime;
+    }
 
     // ------------------------------------------------------------------------
     //  Closing
