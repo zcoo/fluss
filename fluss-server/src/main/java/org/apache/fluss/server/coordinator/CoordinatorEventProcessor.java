@@ -314,13 +314,17 @@ public class CoordinatorEventProcessor implements EventProcessor {
         List<ServerInfo> tabletServerInfos = new ArrayList<>();
         List<ServerNode> internalServerNodes = new ArrayList<>();
 
-        LOG.info("Load tablet servers ids success when initializing coordinator context.");
+        LOG.info(
+                "Load tablet servers ids success when initializing coordinator context. ids={}",
+                Arrays.stream(currentServers).boxed().collect(Collectors.toList()));
 
         long start4loadTabletServer = System.currentTimeMillis();
         Map<Integer, TabletServerRegistration> tabletServerRegistrations =
                 zooKeeperClient.getTabletServers(currentServers);
 
-        LOG.info("Load tablet servers info success when initializing coordinator context.");
+        LOG.info(
+                "Load tablet servers info success when initializing coordinator context. Info={}",
+                tabletServerRegistrations);
 
         for (int server : currentServers) {
             TabletServerRegistration registration = tabletServerRegistrations.get(server);

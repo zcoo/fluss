@@ -312,8 +312,11 @@ public class ZooKeeperClient implements AutoCloseable {
                 Arrays.stream(tabletServerIds)
                         .boxed()
                         .collect(toMap(ServerIdZNode::path, id -> id));
+        LOG.info("Zookeeper: Start load tablet servers ids={}", path2IdMap);
 
         List<ZkGetDataResponse> responses = getDataInBackground(path2IdMap.keySet());
+        LOG.info("Zookeeper: Start deal response load tablet servers");
+
         return processGetDataResponses(
                 responses,
                 response -> path2IdMap.get(response.getPath()),
