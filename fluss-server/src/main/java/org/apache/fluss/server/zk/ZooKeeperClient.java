@@ -112,6 +112,8 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -151,6 +153,7 @@ public class ZooKeeperClient implements AutoCloseable {
 
     private final Semaphore inFlightRequests;
     private final Configuration configuration;
+    private final ExecutorService backgroundExecutor;
 
     public ZooKeeperClient(
             CuratorFrameworkWithUnhandledErrorListener curatorFrameworkWrapper,
@@ -167,6 +170,9 @@ public class ZooKeeperClient implements AutoCloseable {
                 configuration.getInt(ConfigOptions.ZOOKEEPER_MAX_INFLIGHT_REQUESTS);
         this.inFlightRequests = new Semaphore(maxInFlightRequests);
         this.configuration = configuration;
+
+        this.backgroundExecutor =
+                Executors.newFixedThreadPool(10, r -> new Thread(r, "zk-background-callback"));
     }
 
     public Optional<byte[]> getOrEmpty(String path) throws Exception {
@@ -1522,10 +1528,14 @@ public class ZooKeeperClient implements AutoCloseable {
 
                     inFlightRequests.acquire();
                     if (request instanceof ZkGetDataRequest) {
-                        zkClient.getData().inBackground(callback).forPath(request.getPath());
+                        zkClient.getData()
+                                .inBackground(callback, backgroundExecutor)
+                                .forPath(request.getPath());
 
                     } else if (request instanceof ZkGetChildrenRequest) {
-                        zkClient.getChildren().inBackground(callback).forPath(request.getPath());
+                        zkClient.getChildren()
+                                .inBackground(callback, backgroundExecutor)
+                                .forPath(request.getPath());
 
                     } else {
                         throw new IllegalArgumentException(
@@ -1554,6 +1564,11 @@ public class ZooKeeperClient implements AutoCloseable {
 
         // Complete future when all responses received
         return (client, event) -> {
+            LOG.info(
+                    "ZK callback received - path: {}, resultCode: {}, type: {}",
+                    event.getPath(),
+                    event.getResultCode(),
+                    event.getType());
             try {
                 Resp response = respCreator.apply(event);
                 responseQueue.add(response);
@@ -1616,7 +1631,7 @@ public class ZooKeeperClient implements AutoCloseable {
             List<Resp> handleRequestInBackground(
                     List<Req> requests, Function<CuratorEvent, Resp> respCreator) throws Exception {
         try {
-            return handleRequestInBackgroundAsync(requests, respCreator).get(5, TimeUnit.SECONDS);
+            return handleRequestInBackgroundAsync(requests, respCreator).get(10, TimeUnit.SECONDS);
         } catch (ExecutionException e) {
             Throwable cause = ExceptionUtils.stripExecutionException(e);
             if (cause instanceof Exception) {
