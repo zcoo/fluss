@@ -20,6 +20,7 @@ package org.apache.fluss.server.zk;
 import org.apache.fluss.annotation.Internal;
 import org.apache.fluss.config.ConfigOptions;
 import org.apache.fluss.config.Configuration;
+import org.apache.fluss.exception.CoordinatorEpochFencedException;
 import org.apache.fluss.metadata.PhysicalTablePath;
 import org.apache.fluss.metadata.ResolvedPartitionSpec;
 import org.apache.fluss.metadata.Schema;
@@ -193,37 +194,34 @@ public class ZooKeeperClient implements AutoCloseable {
      * epoch and coordinator epoch zk version.
      */
     public Optional<Integer> fenceBecomeCoordinatorLeader(int coordinatorId) throws Exception {
+        ensureEpochZnodeExists();
+
         try {
-            ensureEpochZnodeExists();
+            ZkEpoch getEpoch = getCurrentEpoch();
+            int currentEpoch = getEpoch.getCoordinatorEpoch();
+            int currentVersion = getEpoch.getCoordinatorEpochZkVersion();
+            int newEpoch = currentEpoch + 1;
+            LOG.info(
+                    "Coordinator leader {} tries to update epoch. Current epoch={}, Zookeeper version={}, new epoch={}",
+                    coordinatorId,
+                    currentEpoch,
+                    currentVersion,
+                    newEpoch);
 
-            try {
-                ZkEpoch getEpoch = getCurrentEpoch();
-                int currentEpoch = getEpoch.getCoordinatorEpoch();
-                int currentVersion = getEpoch.getCoordinatorEpochZkVersion();
-                int newEpoch = currentEpoch + 1;
-                LOG.info(
-                        "Coordinator leader {} tries to update epoch. Current epoch={}, Zookeeper version={}, new epoch={}",
-                        coordinatorId,
-                        currentEpoch,
-                        currentVersion,
-                        newEpoch);
+            // atomically update epoch
+            zkClient.setData()
+                    .withVersion(currentVersion)
+                    .forPath(
+                            ZkData.CoordinatorEpochZNode.path(),
+                            ZkData.CoordinatorEpochZNode.encode(newEpoch));
 
-                // atomically update epoch
-                zkClient.setData()
-                        .withVersion(currentVersion)
-                        .forPath(
-                                ZkData.CoordinatorEpochZNode.path(),
-                                ZkData.CoordinatorEpochZNode.encode(newEpoch));
-
-                return Optional.of(newEpoch);
-            } catch (KeeperException.BadVersionException e) {
-                // Other coordinator leader has updated epoch.
-                // If this happens, it means our fence is in effect.
-                LOG.info("Coordinator leader {} failed to update epoch.", coordinatorId);
-            }
-        } catch (KeeperException.NodeExistsException e) {
+            return Optional.of(newEpoch);
+        } catch (KeeperException.BadVersionException e) {
+            // Other coordinator leader has updated epoch.
+            // If this happens, it means our fence is in effect.
+            LOG.info("Coordinator leader {} failed to update epoch.", coordinatorId);
+            throw new CoordinatorEpochFencedException("Fenced to become coordinator leader.");
         }
-        return Optional.empty();
     }
 
     /** Register a coordinator leader to ZK. */

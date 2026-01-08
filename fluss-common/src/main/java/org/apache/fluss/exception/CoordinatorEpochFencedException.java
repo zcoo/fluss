@@ -23,4 +23,8 @@ public class CoordinatorEpochFencedException extends RuntimeException {
     public CoordinatorEpochFencedException(String message) {
         super(message);
     }
+
+    public CoordinatorEpochFencedException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

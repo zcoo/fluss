@@ -63,27 +63,32 @@ public class CoordinatorLeaderElection implements AutoCloseable {
                             // to avoid split-brain
                             Optional<Integer> optionalEpoch =
                                     zkClient.fenceBecomeCoordinatorLeader(serverId);
-                            if (optionalEpoch.isPresent()) {
-                                coordinatorContext.setCoordinatorEpochAndZkVersion(
-                                        optionalEpoch.get(),
-                                        coordinatorContext.getCoordinatorEpochZkVersion() + 1);
-                                initLeaderServices.run();
-                            } else {
-                                throw new CoordinatorEpochFencedException(
-                                        "Fenced to become coordinator leader.");
-                            }
-                        } catch (Exception e) {
+                            optionalEpoch.ifPresent(
+                                    integer ->
+                                            coordinatorContext.setCoordinatorEpochAndZkVersion(
+                                                    integer,
+                                                    coordinatorContext
+                                                                    .getCoordinatorEpochZkVersion()
+                                                            + 1));
+                        } catch (CoordinatorEpochFencedException e) {
                             relinquishLeadership();
-                            throw new CoordinatorEpochFencedException(
-                                    "Fenced to become coordinator leader.");
+                            LOG.warn(
+                                    "Coordinator server {} has been fence and not become leader successfully.",
+                                    serverId);
+                            throw e;
+                        } catch (Exception e) {
+                            LOG.warn(
+                                    "Coordinator server {} failed to become leader successfully.",
+                                    serverId);
+                            relinquishLeadership();
                         }
+                        initLeaderServices.run();
                     }
 
                     @Override
                     public void notLeader() {
                         relinquishLeadership();
                         LOG.warn("Coordinator server {} has lost the leadership.", serverId);
-                        isLeader.set(false);
                     }
                 });
 
