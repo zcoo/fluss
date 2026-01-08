@@ -112,6 +112,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -1516,6 +1517,11 @@ public class ZooKeeperClient implements AutoCloseable {
         try {
             for (Req request : requests) {
                 try {
+                    LOG.info(
+                            "Try to access inflight zk request lock for {}, current queue size {}",
+                            request.getPath(),
+                            inFlightRequests.availablePermits());
+
                     inFlightRequests.acquire();
                     if (request instanceof ZkGetDataRequest) {
                         zkClient.getData().inBackground(callback).forPath(request.getPath());
@@ -1563,6 +1569,9 @@ public class ZooKeeperClient implements AutoCloseable {
                 future.completeExceptionally(e);
             } finally {
                 inFlightRequests.release();
+                LOG.info(
+                        "Try to release inflight zk request lock , current queue size {}",
+                        inFlightRequests.availablePermits());
             }
         };
     }
@@ -1609,7 +1618,7 @@ public class ZooKeeperClient implements AutoCloseable {
             List<Resp> handleRequestInBackground(
                     List<Req> requests, Function<CuratorEvent, Resp> respCreator) throws Exception {
         try {
-            return handleRequestInBackgroundAsync(requests, respCreator).get();
+            return handleRequestInBackgroundAsync(requests, respCreator).get(5, TimeUnit.SECONDS);
         } catch (ExecutionException e) {
             Throwable cause = ExceptionUtils.stripExecutionException(e);
             if (cause instanceof Exception) {
