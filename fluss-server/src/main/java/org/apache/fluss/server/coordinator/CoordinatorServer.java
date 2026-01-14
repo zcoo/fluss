@@ -143,6 +143,9 @@ public class CoordinatorServer extends ServerBase {
     @GuardedBy("lock")
     private CoordinatorLeaderElection coordinatorLeaderElection;
 
+    @GuardedBy("lock")
+    private CompletableFuture<Void> leaderElectionFuture;
+
     public CoordinatorServer(Configuration conf) {
         super(conf);
         validateConfigs(conf);
@@ -160,10 +163,10 @@ public class CoordinatorServer extends ServerBase {
     @Override
     protected void startServices() throws Exception {
         this.coordinatorContext = new CoordinatorContext();
-        electCoordinatorLeader();
+        electCoordinatorLeaderAsync();
     }
 
-    private void electCoordinatorLeader() throws Exception {
+    private CompletableFuture<Void> electCoordinatorLeaderAsync() throws Exception {
         this.zkClient = ZooKeeperUtils.startZookeeperClient(conf, this);
 
         // Coordinator Server supports high availability. If 3 coordinator servers are alive,
@@ -176,14 +179,16 @@ public class CoordinatorServer extends ServerBase {
         // standby
         this.coordinatorLeaderElection =
                 new CoordinatorLeaderElection(zkClient, serverId, coordinatorContext);
-        coordinatorLeaderElection.startElectLeader(
-                () -> {
-                    try {
-                        startCoordinatorLeaderService();
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                });
+        this.leaderElectionFuture =
+                coordinatorLeaderElection.startElectLeaderAsync(
+                        () -> {
+                            try {
+                                startCoordinatorLeaderService();
+                            } catch (Exception e) {
+                                throw new RuntimeException(e);
+                            }
+                        });
+        return leaderElectionFuture;
     }
 
     protected void startCoordinatorLeaderService() throws Exception {
