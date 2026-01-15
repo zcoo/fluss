@@ -194,6 +194,7 @@ public final class FlussClusterExtension
         // metadata.
         for (TabletServer tabletServer : tabletServers.values()) {
             tabletServer.getMetadataCache().clearTableMetadata();
+            tabletServer.getReplicaManager().resetCoordinatorEpoch();
         }
     }
 
