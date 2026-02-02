@@ -192,18 +192,6 @@ public final class KvTablet {
             throws IOException {
         RocksDBKv kv = buildRocksDBKv(serverConf, kvTabletDir, sharedRateLimiter);
 
-        // Create RocksDB statistics accessor (will be registered to TableMetricGroup by Replica)
-        // Pass ResourceGuard to ensure thread-safe access during concurrent close operations
-        // Pass ColumnFamilyHandle for column family specific properties like num-files-at-level0
-        // Pass Cache for accurate block cache memory tracking
-        RocksDBStatistics rocksDBStatistics =
-                new RocksDBStatistics(
-                        kv.getDb(),
-                        kv.getStatistics(),
-                        kv.getResourceGuard(),
-                        kv.getDefaultColumnFamilyHandle(),
-                        kv.getBlockCache());
-
         return new KvTablet(
                 tablePath,
                 tableBucket,
@@ -220,7 +208,7 @@ public final class KvTablet {
                 arrowCompressionInfo,
                 schemaGetter,
                 changelogImage,
-                rocksDBStatistics,
+                null,
                 autoIncrementManager);
     }
 
