@@ -68,5 +68,5 @@ fi
 if [[ $STARTSTOP == "start-foreground" ]]; then
     exec "${FLUSS_BIN_DIR}"/fluss-console.sh $SERVICE "${args[@]}"
 else
-    "${FLUSS_BIN_DIR}"/fluss-daemon.sh $STARTSTOP $SERVICE "${args[@]}"
+    LD_PRELOAD=/opt/jemalloc_with_prof/lib/libjemalloc.so "${FLUSS_BIN_DIR}"/fluss-daemon.sh $STARTSTOP $SERVICE "${args[@]}"
 fi
