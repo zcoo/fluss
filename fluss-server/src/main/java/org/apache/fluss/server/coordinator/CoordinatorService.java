@@ -34,6 +34,7 @@ import org.apache.fluss.exception.InvalidDatabaseException;
 import org.apache.fluss.exception.InvalidTableException;
 import org.apache.fluss.exception.LakeTableAlreadyExistException;
 import org.apache.fluss.exception.NonPrimaryKeyTableException;
+import org.apache.fluss.exception.NotCoordinatorLeaderException;
 import org.apache.fluss.exception.SecurityDisabledException;
 import org.apache.fluss.exception.TableAlreadyExistException;
 import org.apache.fluss.exception.TableNotPartitionedException;
@@ -239,6 +240,7 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
     private final LakeTableHelper lakeTableHelper;
     private final ProducerOffsetsManager producerOffsetsManager;
     private final KvSnapshotLeaseManager kvSnapshotLeaseManager;
+    private final CoordinatorLeaderElection coordinatorLeaderElection;
 
     public CoordinatorService(
             Configuration conf,
@@ -252,7 +254,8 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
             LakeTableTieringManager lakeTableTieringManager,
             DynamicConfigManager dynamicConfigManager,
             ExecutorService ioExecutor,
-            KvSnapshotLeaseManager kvSnapshotLeaseManager) {
+            KvSnapshotLeaseManager kvSnapshotLeaseManager,
+            CoordinatorLeaderElection coordinatorLeaderElection) {
         super(
                 remoteFileSystem,
                 ServerType.COORDINATOR,
@@ -281,11 +284,27 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         this.producerOffsetsManager.start();
 
         this.kvSnapshotLeaseManager = kvSnapshotLeaseManager;
+        this.coordinatorLeaderElection = coordinatorLeaderElection;
     }
 
     @Override
     public String name() {
         return "coordinator";
+    }
+
+    /**
+     * Checks whether this coordinator server is the current leader.
+     *
+     * <p>This method should be called at the beginning of every method annotated with {@link
+     * RequireCoordinatorLeader} to guard against requests being processed by a standby coordinator.
+     *
+     * @throws NotCoordinatorLeaderException if this server is not the current coordinator leader
+     */
+    private void checkLeader() {
+        if (!coordinatorLeaderElection.isLeader()) {
+            throw new NotCoordinatorLeaderException(
+                    "This coordinator server is not the current leader.");
+        }
     }
 
     @Override
@@ -346,8 +365,10 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         }
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<CreateDatabaseResponse> createDatabase(CreateDatabaseRequest request) {
+        checkLeader();
         if (authorizer != null) {
             authorizer.authorize(currentSession(), OperationType.CREATE, Resource.cluster());
         }
@@ -370,6 +391,7 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return CompletableFuture.completedFuture(response);
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<AlterDatabaseResponse> alterDatabase(AlterDatabaseRequest request) {
         String databaseName = request.getDatabaseName();
@@ -414,6 +436,7 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
 
     @Override
     public CompletableFuture<DropDatabaseResponse> dropDatabase(DropDatabaseRequest request) {
+        checkLeader();
         authorizeDatabase(OperationType.DROP, request.getDatabaseName());
         DropDatabaseResponse response = new DropDatabaseResponse();
         metadataManager.dropDatabase(
@@ -421,8 +444,10 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return CompletableFuture.completedFuture(response);
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<CreateTableResponse> createTable(CreateTableRequest request) {
+        checkLeader();
         TablePath tablePath = toTablePath(request.getTablePath());
         tablePath.validate();
         authorizeDatabase(OperationType.CREATE, tablePath.getDatabaseName());
@@ -488,8 +513,10 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return CompletableFuture.completedFuture(new CreateTableResponse());
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<AlterTableResponse> alterTable(AlterTableRequest request) {
+        checkLeader();
         TablePath tablePath = toTablePath(request.getTablePath());
         tablePath.validate();
         authorizeTable(OperationType.ALTER, tablePath);
@@ -648,8 +675,10 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return Boolean.parseBoolean(dataLakeEnabledValue);
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<DropTableResponse> dropTable(DropTableRequest request) {
+        checkLeader();
         TablePath tablePath = toTablePath(request.getTablePath());
         authorizeTable(OperationType.DROP, tablePath);
 
@@ -658,9 +687,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return CompletableFuture.completedFuture(response);
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<CreatePartitionResponse> createPartition(
             CreatePartitionRequest request) {
+        checkLeader();
         TablePath tablePath = toTablePath(request.getTablePath());
         authorizeTable(OperationType.WRITE, tablePath);
 
@@ -695,8 +726,10 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return CompletableFuture.completedFuture(response);
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<DropPartitionResponse> dropPartition(DropPartitionRequest request) {
+        checkLeader();
         TablePath tablePath = toTablePath(request.getTablePath());
         authorizeTable(OperationType.WRITE, tablePath);
 
@@ -717,8 +750,10 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return CompletableFuture.completedFuture(response);
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<MetadataResponse> metadata(MetadataRequest request) {
+        checkLeader();
         String listenerName = currentListenerName();
         Session session = currentSession();
 
@@ -737,7 +772,9 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return metadataResponseAccessContextEvent.getResultFuture();
     }
 
+    @RequireCoordinatorLeader
     public CompletableFuture<AdjustIsrResponse> adjustIsr(AdjustIsrRequest request) {
+        checkLeader();
         CompletableFuture<AdjustIsrResponse> response = new CompletableFuture<>();
         eventManagerSupplier
                 .get()
@@ -745,9 +782,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return response;
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<CommitKvSnapshotResponse> commitKvSnapshot(
             CommitKvSnapshotRequest request) {
+        checkLeader();
         CompletableFuture<CommitKvSnapshotResponse> response = new CompletableFuture<>();
         // parse completed snapshot from request
         byte[] completedSnapshotBytes = request.getCompletedSnapshot();
@@ -762,9 +801,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return response;
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<CommitRemoteLogManifestResponse> commitRemoteLogManifest(
             CommitRemoteLogManifestRequest request) {
+        checkLeader();
         CompletableFuture<CommitRemoteLogManifestResponse> response = new CompletableFuture<>();
         eventManagerSupplier
                 .get()
@@ -774,8 +815,10 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return response;
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<CreateAclsResponse> createAcls(CreateAclsRequest request) {
+        checkLeader();
         if (authorizer == null) {
             throw new SecurityDisabledException("No Authorizer is configured.");
         }
@@ -784,8 +827,10 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return CompletableFuture.completedFuture(makeCreateAclsResponse(aclCreateResults));
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<DropAclsResponse> dropAcls(DropAclsRequest request) {
+        checkLeader();
         if (authorizer == null) {
             throw new SecurityDisabledException("No Authorizer is configured.");
         }
@@ -794,9 +839,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return CompletableFuture.completedFuture(makeDropAclsResponse(aclDeleteResults));
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<PrepareLakeTableSnapshotResponse> prepareLakeTableSnapshot(
             PrepareLakeTableSnapshotRequest request) {
+        checkLeader();
         CompletableFuture<PrepareLakeTableSnapshotResponse> future = new CompletableFuture<>();
         boolean ignorePreviousBucketOffsets =
                 request.hasIgnorePreviousTableOffsets() && request.isIgnorePreviousTableOffsets();
@@ -845,9 +892,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return future;
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<CommitLakeTableSnapshotResponse> commitLakeTableSnapshot(
             CommitLakeTableSnapshotRequest request) {
+        checkLeader();
         CompletableFuture<CommitLakeTableSnapshotResponse> response = new CompletableFuture<>();
         eventManagerSupplier
                 .get()
@@ -857,9 +906,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return response;
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<LakeTieringHeartbeatResponse> lakeTieringHeartbeat(
             LakeTieringHeartbeatRequest request) {
+        checkLeader();
         LakeTieringHeartbeatResponse heartbeatResponse = new LakeTieringHeartbeatResponse();
         int currentCoordinatorEpoch = coordinatorEpochSupplier.get();
         heartbeatResponse.setCoordinatorEpoch(currentCoordinatorEpoch);
@@ -933,9 +984,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return CompletableFuture.completedFuture(heartbeatResponse);
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<ControlledShutdownResponse> controlledShutdown(
             ControlledShutdownRequest request) {
+        checkLeader();
         if (authorizer != null) {
             authorizer.authorize(currentSession(), OperationType.ALTER, Resource.cluster());
         }
@@ -951,9 +1004,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return response;
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<AcquireKvSnapshotLeaseResponse> acquireKvSnapshotLease(
             AcquireKvSnapshotLeaseRequest request) {
+        checkLeader();
         for (PbKvSnapshotLeaseForTable kvSnapshotLeaseForTable :
                 request.getSnapshotsToLeasesList()) {
             long tableId = kvSnapshotLeaseForTable.getTableId();
@@ -985,9 +1040,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
                 ioExecutor);
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<ReleaseKvSnapshotLeaseResponse> releaseKvSnapshotLease(
             ReleaseKvSnapshotLeaseRequest request) {
+        checkLeader();
         for (PbTableBucket tableBucket : request.getBucketsToReleasesList()) {
             long tableId = tableBucket.getTableId();
             if (authorizer != null) {
@@ -1018,9 +1075,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
                 ioExecutor);
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<DropKvSnapshotLeaseResponse> dropKvSnapshotLease(
             DropKvSnapshotLeaseRequest request) {
+        checkLeader();
         String leaseId = request.getLeaseId();
         // Capture session before entering async block since currentSession() is thread-local
         Session session = authorizer != null ? currentSession() : null;
@@ -1057,9 +1116,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
                 ioExecutor);
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<AlterClusterConfigsResponse> alterClusterConfigs(
             AlterClusterConfigsRequest request) {
+        checkLeader();
         CompletableFuture<AlterClusterConfigsResponse> future = new CompletableFuture<>();
         List<PbAlterConfig> infos = request.getAlterConfigsList();
         if (infos.isEmpty()) {
@@ -1100,8 +1161,10 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return future;
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<AddServerTagResponse> addServerTag(AddServerTagRequest request) {
+        checkLeader();
         if (authorizer != null) {
             authorizer.authorize(currentSession(), OperationType.ALTER, Resource.cluster());
         }
@@ -1119,9 +1182,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return response;
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<RemoveServerTagResponse> removeServerTag(
             RemoveServerTagRequest request) {
+        checkLeader();
         if (authorizer != null) {
             authorizer.authorize(currentSession(), OperationType.ALTER, Resource.cluster());
         }
@@ -1139,8 +1204,10 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return response;
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<RebalanceResponse> rebalance(RebalanceRequest request) {
+        checkLeader();
         if (authorizer != null) {
             authorizer.authorize(currentSession(), OperationType.WRITE, Resource.cluster());
         }
@@ -1154,9 +1221,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return response;
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<ListRebalanceProgressResponse> listRebalanceProgress(
             ListRebalanceProgressRequest request) {
+        checkLeader();
         if (authorizer != null) {
             authorizer.authorize(currentSession(), OperationType.DESCRIBE, Resource.cluster());
         }
@@ -1171,9 +1240,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
         return response;
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<CancelRebalanceResponse> cancelRebalance(
             CancelRebalanceRequest request) {
+        checkLeader();
         if (authorizer != null) {
             authorizer.authorize(currentSession(), OperationType.WRITE, Resource.cluster());
         }
@@ -1284,9 +1355,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
     // Producer Offset Management APIs (for Exactly-Once Semantics)
     // ==================================================================================
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<RegisterProducerOffsetsResponse> registerProducerOffsets(
             RegisterProducerOffsetsRequest request) {
+        checkLeader();
         // Authorization: require WRITE permission on all tables in the request
         if (authorizer != null) {
             for (PbProducerTableOffsets tableOffsets : request.getTableOffsetsList()) {
@@ -1330,9 +1403,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
                 ioExecutor);
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<GetProducerOffsetsResponse> getProducerOffsets(
             GetProducerOffsetsRequest request) {
+        checkLeader();
         String producerId = request.getProducerId();
         // Capture session before entering async block since currentSession() is thread-local
         Session session = authorizer != null ? currentSession() : null;
@@ -1389,9 +1464,11 @@ public final class CoordinatorService extends RpcServiceBase implements Coordina
                 ioExecutor);
     }
 
+    @RequireCoordinatorLeader
     @Override
     public CompletableFuture<DeleteProducerOffsetsResponse> deleteProducerOffsets(
             DeleteProducerOffsetsRequest request) {
+        checkLeader();
         // Capture session before entering async block since currentSession() is thread-local
         Session session = authorizer != null ? currentSession() : null;
         return CompletableFuture.supplyAsync(
