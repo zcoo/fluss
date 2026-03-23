@@ -116,6 +116,9 @@ public class CoordinatorServer extends ServerBase {
     private CoordinatorMetadataCache metadataCache;
 
     @GuardedBy("lock")
+    private MetadataManager metadataManager;
+
+    @GuardedBy("lock")
     private CoordinatorChannelManager coordinatorChannelManager;
 
     @GuardedBy("lock")
@@ -180,22 +183,15 @@ public class CoordinatorServer extends ServerBase {
     }
 
     private CompletableFuture<Void> electCoordinatorLeaderAsync() throws Exception {
-        this.zkClient = ZooKeeperUtils.startZookeeperClient(conf, this);
+        initCoordinatorStandby();
 
-        // Coordinator Server supports high availability. If 3 coordinator servers are alive,
-        // one of them will be elected as leader and the other two will be standby.
-        // When leader fails, one of standby coordinators will be elected as new leader.
-        registerCoordinatorServer();
-        ZooKeeperUtils.registerZookeeperClientReInitSessionListener(
-                zkClient, this::registerCoordinatorServer, this);
-
-        // standby
-        this.coordinatorLeaderElection = new CoordinatorLeaderElection(zkClient, serverId);
+        // start election (coordinatorLeaderElection is created inside initCoordinatorStandby
+        // after zkClient is initialized)
         this.leaderElectionFuture =
                 coordinatorLeaderElection.startElectLeaderAsync(
                         () -> {
                             try {
-                                startCoordinatorLeaderService();
+                                initCoordinatorLeader();
                             } catch (Exception e) {
                                 throw new RuntimeException(e);
                             }
@@ -203,10 +199,13 @@ public class CoordinatorServer extends ServerBase {
         return leaderElectionFuture;
     }
 
-    protected void startCoordinatorLeaderService() throws Exception {
-
+    protected void initCoordinatorStandby() throws Exception {
+        // When a coordinator server starts, it first becomes a standby.
+        // This method execute initialization for standby, opening necessary rpc server port.
+        // Corresponding rpc methods will reject requests from clients
+        // and just serve for health check.
         synchronized (lock) {
-            LOG.info("Initializing Coordinator services.");
+            LOG.info("Initializing Coordinator services as standby.");
             List<Endpoint> endpoints = Endpoint.loadBindEndpoints(conf, ServerType.COORDINATOR);
 
             // for metrics
@@ -217,6 +216,11 @@ public class CoordinatorServer extends ServerBase {
                             ServerMetricUtils.validateAndGetClusterId(conf),
                             endpoints.get(0).getHost(),
                             serverId);
+
+            this.zkClient = ZooKeeperUtils.startZookeeperClient(conf, this);
+
+            // CoordinatorLeaderElection must be created after zkClient is initialized.
+            this.coordinatorLeaderElection = new CoordinatorLeaderElection(zkClient, serverId);
 
             this.lakeCatalogDynamicLoader = new LakeCatalogDynamicLoader(conf, pluginManager, true);
             this.dynamicConfigManager = new DynamicConfigManager(zkClient, conf, true);
@@ -238,8 +242,7 @@ public class CoordinatorServer extends ServerBase {
                     new LakeTableTieringManager(
                             new LakeTieringMetricGroup(metricRegistry, serverMetricGroup));
 
-            MetadataManager metadataManager =
-                    new MetadataManager(zkClient, conf, lakeCatalogDynamicLoader);
+            this.metadataManager = new MetadataManager(zkClient, conf, lakeCatalogDynamicLoader);
             this.ioExecutor =
                     Executors.newFixedThreadPool(
                             conf.get(ConfigOptions.SERVER_IO_POOL_SIZE),
@@ -269,7 +272,8 @@ public class CoordinatorServer extends ServerBase {
                             lakeTableTieringManager,
                             dynamicConfigManager,
                             ioExecutor,
-                            kvSnapshotLeaseManager);
+                            kvSnapshotLeaseManager,
+                            coordinatorLeaderElection);
 
             this.rpcServer =
                     RpcServer.create(
@@ -280,7 +284,12 @@ public class CoordinatorServer extends ServerBase {
                             RequestsMetrics.createCoordinatorServerRequestMetrics(
                                     serverMetricGroup));
             rpcServer.start();
+        }
+    }
 
+    protected void initCoordinatorLeader() throws Exception {
+
+        synchronized (lock) {
             this.clientMetricGroup = new ClientMetricGroup(metricRegistry, SERVER_NAME);
             this.rpcClient = RpcClient.create(conf, clientMetricGroup, true);
 
