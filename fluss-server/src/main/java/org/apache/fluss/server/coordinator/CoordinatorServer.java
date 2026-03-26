@@ -208,6 +208,10 @@ public class CoordinatorServer extends ServerBase {
             LOG.info("Initializing Coordinator services as standby.");
             List<Endpoint> endpoints = Endpoint.loadBindEndpoints(conf, ServerType.COORDINATOR);
 
+            registerCoordinatorServer();
+            ZooKeeperUtils.registerZookeeperClientReInitSessionListener(
+                    zkClient, this::registerCoordinatorServer, this);
+
             // for metrics
             this.metricRegistry = MetricRegistry.create(conf, pluginManager);
             this.serverMetricGroup =
@@ -345,6 +349,10 @@ public class CoordinatorServer extends ServerBase {
 
     private void registerCoordinatorServer() throws Exception {
         long startTime = System.currentTimeMillis();
+        List<Endpoint> bindEndpoints = rpcServer.getBindEndpoints();
+        CoordinatorAddress coordinatorAddress =
+                new CoordinatorAddress(
+                        this.serverId, Endpoint.loadAdvertisedEndpoints(bindEndpoints, conf));
 
         // we need to retry to register since although
         // zkClient reconnect, the ephemeral node may still exist
@@ -352,7 +360,7 @@ public class CoordinatorServer extends ServerBase {
         // see ZOOKEEPER-2985
         while (true) {
             try {
-                zkClient.registerCoordinatorServer(this.serverId);
+                zkClient.registerCoordinatorServer(coordinatorAddress);
                 break;
             } catch (KeeperException.NodeExistsException nodeExistsException) {
                 long elapsedTime = System.currentTimeMillis() - startTime;

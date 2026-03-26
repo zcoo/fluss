@@ -324,6 +324,15 @@ public final class ZkData {
         public static String path(String serverId) {
             return CoordinatorIdsZNode.path() + "/" + serverId;
         }
+
+        public static byte[] encode(CoordinatorAddress coordinatorAddress) {
+            return JsonSerdeUtils.writeValueAsBytes(
+                    coordinatorAddress, CoordinatorAddressJsonSerde.INSTANCE);
+        }
+
+        public static CoordinatorAddress decode(byte[] json) {
+            return JsonSerdeUtils.readValue(json, CoordinatorAddressJsonSerde.INSTANCE);
+        }
     }
 
     /**

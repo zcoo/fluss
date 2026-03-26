@@ -188,10 +188,13 @@ public class ZooKeeperClient implements AutoCloseable {
     // --------------------------------------------------------------------------------------------
 
     /** Register a coordinator server to ZK. */
-    public void registerCoordinatorServer(String coordinatorId) throws Exception {
-        String path = ZkData.CoordinatorIdZNode.path(coordinatorId);
-        zkClient.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).forPath(path);
-        LOG.info("Registered Coordinator server {} at path {}.", coordinatorId, path);
+    public void registerCoordinatorServer(CoordinatorAddress coordinatorAddress) throws Exception {
+        String path = ZkData.CoordinatorIdZNode.path(coordinatorAddress.getId());
+        zkClient.create()
+                .creatingParentsIfNeeded()
+                .withMode(CreateMode.EPHEMERAL)
+                .forPath(path, ZkData.CoordinatorIdZNode.encode(coordinatorAddress));
+        LOG.info("Registered Coordinator server {} at path {}.", coordinatorAddress, path);
     }
 
     /** Register a coordinator leader to ZK. */

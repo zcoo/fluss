@@ -17,7 +17,6 @@
 
 package org.apache.fluss.server.coordinator.event.watcher;
 
-import org.apache.fluss.exception.FlussRuntimeException;
 import org.apache.fluss.server.coordinator.event.DeadCoordinatorEvent;
 import org.apache.fluss.server.coordinator.event.EventManager;
 import org.apache.fluss.server.coordinator.event.NewCoordinatorEvent;
@@ -50,12 +49,7 @@ public class CoordinatorChangeWatcher extends ServerBaseChangeWatcher {
     }
 
     protected String getServerIdFromEvent(ChildData data) {
-        try {
-            return ZKPaths.getNodeFromPath(data.getPath());
-        } catch (NumberFormatException e) {
-            throw new FlussRuntimeException(
-                    "Invalid server id in zookeeper path: " + data.getPath(), e);
-        }
+        return ZKPaths.getNodeFromPath(data.getPath());
     }
 
     private final class CoordinatorChangeListener implements CuratorCacheListener {
