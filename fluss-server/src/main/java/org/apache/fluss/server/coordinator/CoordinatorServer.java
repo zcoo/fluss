@@ -195,6 +195,13 @@ public class CoordinatorServer extends ServerBase {
                             } catch (Exception e) {
                                 throw new RuntimeException(e);
                             }
+                        },
+                        (Throwable t) -> {
+                            try {
+                                cleanupCoordinatorLeader();
+                            } catch (Exception e) {
+                                LOG.error("Failed to cleanup coordinator leader services", e);
+                            }
                         });
         return leaderElectionFuture;
     }
@@ -325,6 +332,72 @@ public class CoordinatorServer extends ServerBase {
             coordinatorEventProcessor.startup();
 
             createDefaultDatabase();
+        }
+    }
+
+    /**
+     * Cleans up leader-specific resources when this server loses leadership.
+     *
+     * <p>This method is called by {@link CoordinatorLeaderElection} when the server transitions
+     * from leader to standby. It cleans up leader-only resources while keeping the server running
+     * as a standby, ready to participate in future elections.
+     */
+    protected void cleanupCoordinatorLeader() throws Exception {
+        synchronized (lock) {
+            LOG.info("Cleaning up coordinator leader services.");
+
+            // Clean up leader-specific resources in reverse order of initialization
+            try {
+                if (coordinatorEventProcessor != null) {
+                    coordinatorEventProcessor.shutdown();
+                    coordinatorEventProcessor = null;
+                }
+            } catch (Throwable t) {
+                LOG.warn("Failed to shutdown coordinator event processor", t);
+            }
+
+            try {
+                if (coordinatorChannelManager != null) {
+                    coordinatorChannelManager.close();
+                    coordinatorChannelManager = null;
+                }
+            } catch (Throwable t) {
+                LOG.warn("Failed to close coordinator channel manager", t);
+            }
+
+            try {
+                if (autoPartitionManager != null) {
+                    autoPartitionManager.close();
+                    autoPartitionManager = null;
+                }
+            } catch (Throwable t) {
+                LOG.warn("Failed to close auto partition manager", t);
+            }
+
+            try {
+                if (rpcClient != null) {
+                    rpcClient.close();
+                    rpcClient = null;
+                }
+            } catch (Throwable t) {
+                LOG.warn("Failed to close RPC client", t);
+            }
+
+            try {
+                if (clientMetricGroup != null) {
+                    clientMetricGroup.close();
+                    clientMetricGroup = null;
+                }
+            } catch (Throwable t) {
+                LOG.warn("Failed to close client metric group", t);
+            }
+
+            // Reset coordinator context for next election
+            if (coordinatorContext != null) {
+                coordinatorContext.resetContext();
+            }
+
+            LOG.info("Coordinator leader services cleaned up successfully.");
         }
     }
 

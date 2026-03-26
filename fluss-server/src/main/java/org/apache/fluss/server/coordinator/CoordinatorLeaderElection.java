@@ -28,8 +28,20 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
-/** Using by coordinator server. Coordinator servers listen ZK node and elect leadership. */
+/**
+ * Using by coordinator server. Coordinator servers listen ZK node and elect leadership.
+ *
+ * <p>This class manages the leader election lifecycle:
+ *
+ * <ul>
+ *   <li>Start election and participate as a candidate
+ *   <li>When elected as leader, invoke the initialization callback
+ *   <li>When losing leadership, clean up leader resources but continue participating in election
+ *   <li>Can be re-elected as leader multiple times
+ * </ul>
+ */
 public class CoordinatorLeaderElection implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(CoordinatorLeaderElection.class);
 
@@ -37,7 +49,8 @@ public class CoordinatorLeaderElection implements AutoCloseable {
     private final LeaderLatch leaderLatch;
     private final AtomicBoolean isLeader = new AtomicBoolean(false);
     private final CompletableFuture<Void> leaderReadyFuture = new CompletableFuture<>();
-    private volatile Thread electionThread;
+    private volatile Runnable initLeaderServices;
+    private volatile Consumer<Throwable> cleanupLeaderServices;
 
     public CoordinatorLeaderElection(ZooKeeperClient zkClient, String serverId) {
         this.serverId = serverId;
@@ -50,24 +63,58 @@ public class CoordinatorLeaderElection implements AutoCloseable {
 
     /**
      * Starts the leader election process asynchronously. The returned future completes when this
-     * server becomes the leader and initializes the leader services.
+     * server becomes the leader for the first time and initializes the leader services.
      *
-     * @param initLeaderServices the runnable to initialize leader services once elected
-     * @return a CompletableFuture that completes when this server becomes leader
+     * <p>After the first election, the server will continue to participate in future elections.
+     * When re-elected as leader, the initLeaderServices callback will be invoked again.
+     *
+     * @param initLeaderServices the callback to initialize leader services once elected
+     * @param cleanupLeaderServices the callback to clean up leader services when losing leadership
+     * @return a CompletableFuture that completes when this server becomes leader for the first time
      */
-    public CompletableFuture<Void> startElectLeaderAsync(Runnable initLeaderServices) {
+    public CompletableFuture<Void> startElectLeaderAsync(
+            Runnable initLeaderServices, Consumer<Throwable> cleanupLeaderServices) {
+        this.initLeaderServices = initLeaderServices;
+        this.cleanupLeaderServices = cleanupLeaderServices;
+
         leaderLatch.addListener(
                 new LeaderLatchListener() {
                     @Override
                     public void isLeader() {
                         LOG.info("Coordinator server {} has become the leader.", serverId);
                         isLeader.set(true);
+                        try {
+                            initLeaderServices.run();
+                            // Complete the future on first election
+                            leaderReadyFuture.complete(null);
+                        } catch (Exception e) {
+                            LOG.error(
+                                    "Failed to initialize leader services for server {}",
+                                    serverId,
+                                    e);
+                            leaderReadyFuture.completeExceptionally(e);
+                        }
                     }
 
                     @Override
                     public void notLeader() {
-                        relinquishLeadership();
-                        LOG.warn("Coordinator server {} has lost the leadership.", serverId);
+                        if (isLeader.compareAndSet(true, false)) {
+                            LOG.warn(
+                                    "Coordinator server {} has lost the leadership, cleaning up leader services.",
+                                    serverId);
+                            // Clean up leader-specific resources but keep participating in
+                            // election
+                            if (cleanupLeaderServices != null) {
+                                try {
+                                    cleanupLeaderServices.accept(null);
+                                } catch (Exception e) {
+                                    LOG.error(
+                                            "Failed to cleanup leader services for server {}",
+                                            serverId,
+                                            e);
+                                }
+                            }
+                        }
                     }
                 });
 
@@ -78,51 +125,14 @@ public class CoordinatorLeaderElection implements AutoCloseable {
             LOG.error("Failed to start LeaderLatch for server {}", serverId, e);
             leaderReadyFuture.completeExceptionally(
                     new RuntimeException("Leader election start failed", e));
-            return leaderReadyFuture;
         }
 
-        // Run the await and initialization in a separate thread to avoid blocking
-        electionThread =
-                new Thread(
-                        () -> {
-                            try {
-                                // todo: Currently, we await the leader latch and do nothing until
-                                // it becomes leader.
-                                // Later we can make it as a hot backup server to continuously
-                                // synchronize metadata from
-                                // Zookeeper, which save time from recovering context
-                                leaderLatch.await();
-                                doInitLeaderServices(initLeaderServices);
-                                leaderReadyFuture.complete(null);
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                LOG.info(
-                                        "Leader election for server {} was interrupted.", serverId);
-                                leaderReadyFuture.completeExceptionally(e);
-                            } catch (Exception e) {
-                                LOG.error(
-                                        "Failed during leader election for server {}", serverId, e);
-                                leaderReadyFuture.completeExceptionally(e);
-                            }
-                        },
-                        "coordinator-leader-election-" + serverId);
-        electionThread.start();
-
         return leaderReadyFuture;
-    }
-
-    private void doInitLeaderServices(Runnable initLeaderServices) {
-        initLeaderServices.run();
     }
 
     @Override
     public void close() {
         LOG.info("Closing LeaderLatch for server {}.", serverId);
-
-        // Interrupt the election thread if it's waiting
-        if (electionThread != null && electionThread.isAlive()) {
-            electionThread.interrupt();
-        }
 
         if (leaderLatch != null) {
             try {
@@ -133,18 +143,13 @@ public class CoordinatorLeaderElection implements AutoCloseable {
         }
 
         // Complete the future exceptionally if it hasn't been completed yet
-        leaderReadyFuture.completeExceptionally(
-                new RuntimeException("Leader election closed for server " + serverId));
+        if (!leaderReadyFuture.isDone()) {
+            leaderReadyFuture.completeExceptionally(
+                    new RuntimeException("Leader election closed for server " + serverId));
+        }
     }
 
     public boolean isLeader() {
         return this.isLeader.get();
-    }
-
-    private void relinquishLeadership() {
-        isLeader.set(false);
-        LOG.info("Coordinator server {} has been fenced.", serverId);
-
-        this.close();
     }
 }
