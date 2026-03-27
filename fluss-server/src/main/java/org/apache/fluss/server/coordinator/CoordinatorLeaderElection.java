@@ -27,6 +27,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -49,6 +51,11 @@ public class CoordinatorLeaderElection implements AutoCloseable {
     private final LeaderLatch leaderLatch;
     private final AtomicBoolean isLeader = new AtomicBoolean(false);
     private final CompletableFuture<Void> leaderReadyFuture = new CompletableFuture<>();
+    // Single-threaded executor to run leader lifecycle callbacks outside Curator's EventThread.
+    // Curator's LeaderLatchListener callbacks run on its internal EventThread; performing
+    // synchronous ZK operations there causes deadlock because ZK response dispatch also
+    // needs that same thread.
+    private final ExecutorService leaderCallbackExecutor;
     private volatile Runnable initLeaderServices;
     private volatile Consumer<Throwable> cleanupLeaderServices;
 
@@ -59,6 +66,13 @@ public class CoordinatorLeaderElection implements AutoCloseable {
                         zkClient.getCuratorClient(),
                         ZkData.CoordinatorElectionZNode.path(),
                         String.valueOf(serverId));
+        this.leaderCallbackExecutor =
+                Executors.newSingleThreadExecutor(
+                        r -> {
+                            Thread t = new Thread(r, "coordinator-leader-callback-" + serverId);
+                            t.setDaemon(true);
+                            return t;
+                        });
     }
 
     /**
@@ -83,17 +97,21 @@ public class CoordinatorLeaderElection implements AutoCloseable {
                     public void isLeader() {
                         LOG.info("Coordinator server {} has become the leader.", serverId);
                         isLeader.set(true);
-                        try {
-                            initLeaderServices.run();
-                            // Complete the future on first election
-                            leaderReadyFuture.complete(null);
-                        } catch (Exception e) {
-                            LOG.error(
-                                    "Failed to initialize leader services for server {}",
-                                    serverId,
-                                    e);
-                            leaderReadyFuture.completeExceptionally(e);
-                        }
+                        // Run init on a separate thread to avoid deadlock with
+                        // Curator's EventThread when performing ZK operations.
+                        leaderCallbackExecutor.execute(
+                                () -> {
+                                    try {
+                                        initLeaderServices.run();
+                                        leaderReadyFuture.complete(null);
+                                    } catch (Exception e) {
+                                        LOG.error(
+                                                "Failed to initialize leader services for server {}",
+                                                serverId,
+                                                e);
+                                        leaderReadyFuture.completeExceptionally(e);
+                                    }
+                                });
                     }
 
                     @Override
@@ -102,18 +120,20 @@ public class CoordinatorLeaderElection implements AutoCloseable {
                             LOG.warn(
                                     "Coordinator server {} has lost the leadership, cleaning up leader services.",
                                     serverId);
-                            // Clean up leader-specific resources but keep participating in
-                            // election
-                            if (cleanupLeaderServices != null) {
-                                try {
-                                    cleanupLeaderServices.accept(null);
-                                } catch (Exception e) {
-                                    LOG.error(
-                                            "Failed to cleanup leader services for server {}",
-                                            serverId,
-                                            e);
-                                }
-                            }
+                            // Run cleanup on a separate thread to avoid deadlock.
+                            leaderCallbackExecutor.execute(
+                                    () -> {
+                                        if (cleanupLeaderServices != null) {
+                                            try {
+                                                cleanupLeaderServices.accept(null);
+                                            } catch (Exception e) {
+                                                LOG.error(
+                                                        "Failed to cleanup leader services for server {}",
+                                                        serverId,
+                                                        e);
+                                            }
+                                        }
+                                    });
                         }
                     }
                 });
@@ -141,6 +161,8 @@ public class CoordinatorLeaderElection implements AutoCloseable {
                 LOG.error("Failed to close LeaderLatch for server {}.", serverId, e);
             }
         }
+
+        leaderCallbackExecutor.shutdownNow();
 
         // Complete the future exceptionally if it hasn't been completed yet
         if (!leaderReadyFuture.isDone()) {
