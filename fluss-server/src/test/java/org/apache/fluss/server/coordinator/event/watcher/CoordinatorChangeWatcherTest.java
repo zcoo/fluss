@@ -24,6 +24,7 @@ import org.apache.fluss.server.coordinator.event.TestingEventManager;
 import org.apache.fluss.server.zk.NOPErrorHandler;
 import org.apache.fluss.server.zk.ZooKeeperClient;
 import org.apache.fluss.server.zk.ZooKeeperExtension;
+import org.apache.fluss.server.zk.data.CoordinatorAddress;
 import org.apache.fluss.testutils.common.AllCallbackWrapper;
 
 import org.junit.jupiter.api.Test;
@@ -58,7 +59,9 @@ class CoordinatorChangeWatcherTest {
         List<CoordinatorEvent> expectedEvents = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
             expectedEvents.add(new NewCoordinatorEvent(String.valueOf(i)));
-            zookeeperClient.registerCoordinatorServer(String.valueOf(i));
+            CoordinatorAddress coordinatorAddress =
+                    new CoordinatorAddress(String.valueOf(i), new ArrayList<>());
+            zookeeperClient.registerCoordinatorServer(coordinatorAddress);
         }
 
         retry(

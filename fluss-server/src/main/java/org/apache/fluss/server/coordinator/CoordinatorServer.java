@@ -215,10 +215,6 @@ public class CoordinatorServer extends ServerBase {
             LOG.info("Initializing Coordinator services as standby.");
             List<Endpoint> endpoints = Endpoint.loadBindEndpoints(conf, ServerType.COORDINATOR);
 
-            registerCoordinatorServer();
-            ZooKeeperUtils.registerZookeeperClientReInitSessionListener(
-                    zkClient, this::registerCoordinatorServer, this);
-
             // for metrics
             this.metricRegistry = MetricRegistry.create(conf, pluginManager);
             this.serverMetricGroup =
@@ -295,6 +291,10 @@ public class CoordinatorServer extends ServerBase {
                             RequestsMetrics.createCoordinatorServerRequestMetrics(
                                     serverMetricGroup));
             rpcServer.start();
+
+            registerCoordinatorServer();
+            ZooKeeperUtils.registerZookeeperClientReInitSessionListener(
+                    zkClient, this::registerCoordinatorServer, this);
         }
     }
 
@@ -723,5 +723,10 @@ public class CoordinatorServer extends ServerBase {
     @VisibleForTesting
     public RebalanceManager getRebalanceManager() {
         return coordinatorEventProcessor.getRebalanceManager();
+    }
+
+    @VisibleForTesting
+    public ZooKeeperClient getZooKeeperClient() {
+        return zkClient;
     }
 }
