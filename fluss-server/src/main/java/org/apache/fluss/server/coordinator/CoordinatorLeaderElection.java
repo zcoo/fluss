@@ -29,7 +29,10 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -51,11 +54,14 @@ public class CoordinatorLeaderElection implements AutoCloseable {
     private final LeaderLatch leaderLatch;
     private final AtomicBoolean isLeader = new AtomicBoolean(false);
     private final CompletableFuture<Void> leaderReadyFuture = new CompletableFuture<>();
-    // Single-threaded executor to run leader lifecycle callbacks outside Curator's EventThread.
+    // Single-threaded executor to run leader init callbacks outside Curator's EventThread.
     // Curator's LeaderLatchListener callbacks run on its internal EventThread; performing
     // synchronous ZK operations there causes deadlock because ZK response dispatch also
     // needs that same thread.
     private final ExecutorService leaderCallbackExecutor;
+    // Tracks the pending cleanup task so that init can wait for it to complete.
+    private final AtomicReference<CompletableFuture<Void>> pendingCleanup =
+            new AtomicReference<>(CompletableFuture.completedFuture(null));
     private volatile Runnable initLeaderServices;
     private volatile Consumer<Throwable> cleanupLeaderServices;
 
@@ -96,11 +102,26 @@ public class CoordinatorLeaderElection implements AutoCloseable {
                     @Override
                     public void isLeader() {
                         LOG.info("Coordinator server {} has become the leader.", serverId);
-                        isLeader.set(true);
+                        // Capture the pending cleanup future at this point so that
+                        // init waits for it before proceeding.
+                        CompletableFuture<Void> cleanup = pendingCleanup.get();
                         // Run init on a separate thread to avoid deadlock with
                         // Curator's EventThread when performing ZK operations.
                         leaderCallbackExecutor.execute(
                                 () -> {
+                                    // Wait for any pending cleanup to finish first.
+                                    try {
+                                        cleanup.get(60, TimeUnit.SECONDS);
+                                    } catch (TimeoutException e) {
+                                        LOG.warn(
+                                                "Pending cleanup for server {} did not complete within 60s, proceeding with init.",
+                                                serverId);
+                                    } catch (Exception e) {
+                                        LOG.warn(
+                                                "Error waiting for pending cleanup for server {}",
+                                                serverId,
+                                                e);
+                                    }
                                     try {
                                         initLeaderServices.run();
                                         leaderReadyFuture.complete(null);
@@ -112,6 +133,7 @@ public class CoordinatorLeaderElection implements AutoCloseable {
                                         leaderReadyFuture.completeExceptionally(e);
                                     }
                                 });
+                        isLeader.set(true);
                     }
 
                     @Override
@@ -120,20 +142,31 @@ public class CoordinatorLeaderElection implements AutoCloseable {
                             LOG.warn(
                                     "Coordinator server {} has lost the leadership, cleaning up leader services.",
                                     serverId);
-                            // Run cleanup on a separate thread to avoid deadlock.
-                            leaderCallbackExecutor.execute(
-                                    () -> {
-                                        if (cleanupLeaderServices != null) {
-                                            try {
-                                                cleanupLeaderServices.accept(null);
-                                            } catch (Exception e) {
-                                                LOG.error(
-                                                        "Failed to cleanup leader services for server {}",
-                                                        serverId,
-                                                        e);
-                                            }
-                                        }
-                                    });
+                            // Run cleanup on a separate daemon thread (NOT on the
+                            // leaderCallbackExecutor) to avoid blocking init tasks.
+                            // The cleanup completion is tracked via pendingCleanup so
+                            // that subsequent init waits for it.
+                            CompletableFuture<Void> cleanupFuture = new CompletableFuture<>();
+                            pendingCleanup.set(cleanupFuture);
+                            Thread cleanupThread =
+                                    new Thread(
+                                            () -> {
+                                                try {
+                                                    if (cleanupLeaderServices != null) {
+                                                        cleanupLeaderServices.accept(null);
+                                                    }
+                                                } catch (Exception e) {
+                                                    LOG.error(
+                                                            "Failed to cleanup leader services for server {}",
+                                                            serverId,
+                                                            e);
+                                                } finally {
+                                                    cleanupFuture.complete(null);
+                                                }
+                                            },
+                                            "coordinator-leader-cleanup-" + serverId);
+                            cleanupThread.setDaemon(true);
+                            cleanupThread.start();
                         }
                     }
                 });

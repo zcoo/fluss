@@ -35,6 +35,7 @@ import org.apache.fluss.server.zk.ZooKeeperClient;
 import org.apache.fluss.server.zk.ZooKeeperExtension;
 import org.apache.fluss.server.zk.data.CoordinatorAddress;
 import org.apache.fluss.shaded.curator5.org.apache.curator.framework.CuratorFramework;
+import org.apache.fluss.shaded.zookeeper3.org.apache.zookeeper.Watcher;
 import org.apache.fluss.shaded.zookeeper3.org.apache.zookeeper.ZooKeeper;
 import org.apache.fluss.testutils.common.AllCallbackWrapper;
 
@@ -49,7 +50,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.fluss.testutils.common.CommonTestUtils.waitUntil;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -167,101 +170,40 @@ class CoordinatorHAITCase {
         coordinatorServer1.start();
         coordinatorServer2.start();
 
-        // Wait for first leader election to complete
+        // Step 1: Initial leader election
         waitUntilCoordinatorServerElected();
+        CoordinatorAddress firstLeaderAddr = zookeeperClient.getCoordinatorLeaderAddress().get();
 
-        CoordinatorAddress firstLeaderAddress = zookeeperClient.getCoordinatorLeaderAddress().get();
+        CoordinatorServer leader = findServerById(firstLeaderAddr.getId());
+        CoordinatorServer standby = findServerByNotId(firstLeaderAddr.getId());
+        assertThat(leader).isNotNull();
+        assertThat(standby).isNotNull();
 
-        CoordinatorServer firstLeader = findServerById(firstLeaderAddress.getId());
-        CoordinatorServer firstStandby = findServerByNotId(firstLeaderAddress.getId());
+        verifyServerIsLeader(leader, "test_reentrant_db_1");
+        verifyServerIsStandby(standby);
 
-        assertThat(firstLeader).isNotNull();
-        assertThat(firstStandby).isNotNull();
+        // Step 2: Kill leader's ZK session → standby becomes the new leader
+        killZkSession(leader);
+        waitUntilNewLeaderElected(leader.getServerId());
+        assertThat(zookeeperClient.getCoordinatorLeaderAddress().get().getId())
+                .as("After killing leader, standby should become leader")
+                .isEqualTo(standby.getServerId());
 
-        // Verify first leader can process requests
-        CoordinatorGateway leaderGateway = createGatewayForServer(firstLeader);
-        leaderGateway
-                .createDatabase(
-                        new CreateDatabaseRequest()
-                                .setDatabaseName("test_lifecycle_db_1")
-                                .setIgnoreIfExists(true))
-                .get();
+        verifyServerIsLeader(standby, "test_reentrant_db_2");
+        verifyServerIsStandby(leader);
 
-        // Verify standby rejects requests
-        CoordinatorGateway standbyGateway = createGatewayForServer(firstStandby);
-        assertThatThrownBy(
-                        () ->
-                                standbyGateway
-                                        .createDatabase(
-                                                new CreateDatabaseRequest()
-                                                        .setDatabaseName("test_lifecycle_db_2")
-                                                        .setIgnoreIfExists(false))
-                                        .get())
-                .satisfies(
-                        t ->
-                                assertThat(getRootCause(t))
-                                        .isInstanceOf(NotCoordinatorLeaderException.class));
+        // Step 3: Wait for the killed leader to fully reconnect and re-join election,
+        // then kill the current leader → the original leader should become leader again.
+        // This proves LeaderLatch election is re-entrant.
+        waitUntilServerRegistered(leader);
+        killZkSession(standby);
+        waitUntilNewLeaderElected(standby.getServerId());
+        assertThat(zookeeperClient.getCoordinatorLeaderAddress().get().getId())
+                .as("Original leader should be re-elected, proving re-entrant election")
+                .isEqualTo(leader.getServerId());
 
-        // Kill the leader's ZK session to simulate real session timeout / network partition.
-        // This creates a duplicate ZK connection with the same session ID and closes it,
-        // forcing the ZK server to immediately expire the original session.
-        // This triggers SESSION_EXPIRED -> ConnectionState.LOST -> notLeader() callback.
-        killZkSession(firstLeader);
-
-        // Wait for the former standby to become the new leader
-        waitUntilNewLeaderElected(firstLeader.getServerId());
-        CoordinatorAddress secondLeaderAddress =
-                zookeeperClient.getCoordinatorLeaderAddress().get();
-
-        // The new leader should be the former standby
-        assertThat(secondLeaderAddress.getId()).isEqualTo(firstStandby.getServerId());
-
-        // Verify the former leader is still running but as standby
-        // It should now reject requests
-        CoordinatorGateway formerLeaderGateway = createGatewayForServer(firstLeader);
-        assertThatThrownBy(
-                        () ->
-                                formerLeaderGateway
-                                        .createDatabase(
-                                                new CreateDatabaseRequest()
-                                                        .setDatabaseName("test_lifecycle_db_3")
-                                                        .setIgnoreIfExists(false))
-                                        .get())
-                .satisfies(
-                        t ->
-                                assertThat(getRootCause(t))
-                                        .isInstanceOf(NotCoordinatorLeaderException.class));
-
-        // Verify new leader can process requests
-        CoordinatorGateway newLeaderGateway = createGatewayForServer(firstStandby);
-        newLeaderGateway
-                .createDatabase(
-                        new CreateDatabaseRequest()
-                                .setDatabaseName("test_lifecycle_db_4")
-                                .setIgnoreIfExists(true))
-                .get();
-
-        // Kill the new leader's ZK session to trigger another leadership transfer
-        killZkSession(firstStandby);
-
-        // Wait for re-election (the former leader should be able to become leader again)
-        waitUntilNewLeaderElected(firstStandby.getServerId());
-        CoordinatorAddress thirdLeaderAddress = zookeeperClient.getCoordinatorLeaderAddress().get();
-
-        // Either server can become leader, verify the new leader works
-        CoordinatorServer thirdLeader = findServerById(thirdLeaderAddress.getId());
-        assertThat(thirdLeader).isNotNull();
-
-        CoordinatorGateway reElectedLeaderGateway = createGatewayForServer(thirdLeader);
-        reElectedLeaderGateway
-                .createDatabase(
-                        new CreateDatabaseRequest()
-                                .setDatabaseName("test_lifecycle_db_5")
-                                .setIgnoreIfExists(true))
-                .get();
-
-        // Verify metadata works (read operation)
-        reElectedLeaderGateway.metadata(new MetadataRequest()).get();
+        verifyServerIsLeader(leader, "test_reentrant_db_3");
+        createGatewayForServer(leader).metadata(new MetadataRequest()).get();
     }
 
     @Test
@@ -272,39 +214,32 @@ class CoordinatorHAITCase {
         coordinatorServer1.start();
         coordinatorServer2.start();
 
-        // Perform multiple leadership loss scenarios
+        // Perform multiple leadership loss and recovery cycles.
+        // Each iteration kills the current leader and waits for the other server to take over.
         for (int i = 0; i < 3; i++) {
-            // Wait for current leader
             waitUntilCoordinatorServerElected();
             CoordinatorAddress currentLeaderAddress =
                     zookeeperClient.getCoordinatorLeaderAddress().get();
 
             CoordinatorServer currentLeader = findServerById(currentLeaderAddress.getId());
+            CoordinatorServer otherServer = findServerByNotId(currentLeaderAddress.getId());
             assertThat(currentLeader).isNotNull();
 
-            // Verify leader can process requests
-            CoordinatorGateway gateway = createGatewayForServer(currentLeader);
-            gateway.createDatabase(
-                            new CreateDatabaseRequest()
-                                    .setDatabaseName("test_cycle_db_" + i)
-                                    .setIgnoreIfExists(true))
-                    .get();
+            verifyServerIsLeader(currentLeader, "test_cycle_db_" + i);
 
-            // Kill the leader's ZK session to simulate leadership loss
+            // Ensure the other server has reconnected and re-joined election
+            // (it may have been killed in a previous iteration)
+            waitUntilServerRegistered(otherServer);
+
             killZkSession(currentLeader);
-
-            // Wait for a new leader (different from the killed one)
             waitUntilNewLeaderElected(currentLeaderAddress.getId());
         }
 
         // Final verification: ensure cluster is still functional
         CoordinatorAddress finalLeaderAddress = zookeeperClient.getCoordinatorLeaderAddress().get();
-
         CoordinatorServer finalLeader = findServerById(finalLeaderAddress.getId());
         assertThat(finalLeader).isNotNull();
-
-        CoordinatorGateway finalGateway = createGatewayForServer(finalLeader);
-        finalGateway.metadata(new MetadataRequest()).get();
+        createGatewayForServer(finalLeader).metadata(new MetadataRequest()).get();
     }
 
     private CoordinatorGateway createGatewayForServer(CoordinatorServer server) {
@@ -395,7 +330,27 @@ class CoordinatorHAITCase {
         byte[] sessionPasswd = zk.getSessionPasswd();
         String connectString = ZOO_KEEPER_EXTENSION_WRAPPER.getCustomExtension().getConnectString();
 
-        ZooKeeper dupZk = new ZooKeeper(connectString, 1000, event -> {}, sessionId, sessionPasswd);
+        // We must wait for the duplicate connection to be fully established before
+        // closing it. Otherwise, close() may happen before the TCP connection reaches
+        // the ZK server, meaning the server never sees the duplicate session and the
+        // original session stays alive (making the test flaky).
+        CountDownLatch connectedLatch = new CountDownLatch(1);
+        ZooKeeper dupZk =
+                new ZooKeeper(
+                        connectString,
+                        1000,
+                        event -> {
+                            if (event.getState() == Watcher.Event.KeeperState.SyncConnected) {
+                                connectedLatch.countDown();
+                            }
+                        },
+                        sessionId,
+                        sessionPasswd);
+        if (!connectedLatch.await(10, TimeUnit.SECONDS)) {
+            dupZk.close();
+            throw new RuntimeException(
+                    "Failed to establish duplicate ZK connection for session kill");
+        }
         dupZk.close();
     }
 
@@ -414,5 +369,51 @@ class CoordinatorHAITCase {
                 },
                 Duration.ofMinutes(1),
                 "Fail to wait for new coordinator leader to be elected");
+    }
+
+    /** Verifies that the given server can process requests as the leader. */
+    private void verifyServerIsLeader(CoordinatorServer server, String dbName) throws Exception {
+        createGatewayForServer(server)
+                .createDatabase(
+                        new CreateDatabaseRequest().setDatabaseName(dbName).setIgnoreIfExists(true))
+                .get();
+    }
+
+    /** Verifies that the given server rejects requests as a standby (non-leader). */
+    private void verifyServerIsStandby(CoordinatorServer server) {
+        assertThatThrownBy(
+                        () ->
+                                createGatewayForServer(server)
+                                        .createDatabase(
+                                                new CreateDatabaseRequest()
+                                                        .setDatabaseName(
+                                                                "standby_check_"
+                                                                        + System.nanoTime())
+                                                        .setIgnoreIfExists(false))
+                                        .get())
+                .satisfies(
+                        t ->
+                                assertThat(getRootCause(t))
+                                        .isInstanceOf(NotCoordinatorLeaderException.class));
+    }
+
+    /**
+     * Waits until a server is registered in ZK (its ephemeral node at /coordinators/ids/[serverId]
+     * exists). This ensures the server has reconnected after a session loss and re-joined the
+     * election, so it can become leader when needed.
+     */
+    private void waitUntilServerRegistered(CoordinatorServer server) {
+        String path = "/coordinators/ids/" + server.getServerId();
+        waitUntil(
+                () -> {
+                    try {
+                        return zookeeperClient.getCuratorClient().checkExists().forPath(path)
+                                != null;
+                    } catch (Exception e) {
+                        return false;
+                    }
+                },
+                Duration.ofSeconds(30),
+                "Server " + server.getServerId() + " did not re-register in ZK");
     }
 }
