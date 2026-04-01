@@ -214,7 +214,7 @@ public class ZooKeeperClient implements AutoCloseable {
      * registerCoordinatorLeader(). This is to ensure the coordinator get and update the coordinator
      * epoch and coordinator epoch zk version.
      */
-    public Optional<ZkEpoch> fenceBecomeCoordinatorLeader(int coordinatorId) throws Exception {
+    public Optional<ZkEpoch> fenceBecomeCoordinatorLeader(String coordinatorId) throws Exception {
         ensureEpochZnodeExists();
 
         try {
